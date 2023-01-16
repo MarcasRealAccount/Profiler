@@ -34,6 +34,16 @@
 
 #define BUILD_IS_PLATFORM_AMD64 (BUILD_PLATFORM == BUILD_PLATFORM_AMD64)
 
+#if BUILD_IS_TOOLSET_MSVC
+	#define BUILD_NEVER_INLINE __declspec(noinline)
+#elif BUILD_IS_TOOLSET_CLANG
+	#define BUILD_NEVER_INLINE __attribute__((noinline))
+#elif BUILD_IS_TOOLSET_GCC
+	#define BUILD_NEVER_INLINE __attribute__((noinline))
+#else
+	#define BUILD_NEVER_INLINE
+#endif
+
 namespace Profiler::Core
 {
 	using EBuildConfig   = Utils::Flags<std::uint16_t>;

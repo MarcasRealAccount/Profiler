@@ -44,7 +44,11 @@ namespace Profiler::Utils
 		constexpr Flags(std::convertible_to<T> auto&& value) noexcept
 			: Value(static_cast<T>(value)) {}
 
-		constexpr Flags& operator=(std::convertible_to<T> auto&& value) noexcept { Value = static_cast<T>(value); }
+		constexpr Flags& operator=(std::convertible_to<T> auto&& value) noexcept
+		{
+			Value = static_cast<T>(value);
+			return *this;
+		}
 
 		constexpr bool hasFlag(std::convertible_to<Flags> auto&& flags) const { return (Value & flags) == flags; }
 

@@ -4,7 +4,7 @@ workspace("Profiler")
 
 	cppdialect("C++20")
 	rtti("Off")
-	exceptionhandling("Off")
+	exceptionhandling("On")
 	flags("MultiProcessorCompile")
 
 	startproject("Test")
@@ -21,6 +21,8 @@ workspace("Profiler")
 			"%{prj.location}/Src/**"
 		})
 		removefiles({ "*.DS_Store" })
+
+		pkgdeps({ "fmt" })
 
 		common:addActions()
 
