@@ -1,6 +1,10 @@
 #pragma once
 
+#include "Utils/Core.h"
 #include "Utils/Flags.h"
+
+#include <cstddef>
+#include <cstdint>
 
 #include <atomic>
 #include <mutex>
@@ -13,7 +17,8 @@ namespace Profiler
 	namespace Abilities
 	{
 		static constexpr EAbilities InvariantCPUClock = 1;
-	}
+		static constexpr EAbilities IBS               = 2;
+	} // namespace Abilities
 
 	enum class EEventType : std::uint8_t
 	{
@@ -29,6 +34,12 @@ namespace Profiler
 		FloatArgument,
 		FlagsArgument,
 		PtrArgument,
+		ForLoopBegin,
+		ForLoopEnd,
+		ForLoopIterBegin,
+		ForLoopIterEnd,
+		MemAlloc,
+		MemFree
 	};
 
 	struct EventTimestamp
@@ -180,14 +191,86 @@ namespace Profiler
 		void*        Ptr;
 	};
 
+	struct ForLoopBeginEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::ForLoopBegin;
+
+	public:
+		EEventType     Type;
+		std::size_t    ID;
+		EventTimestamp Timestamp;
+	};
+
+	struct ForLoopEndEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::ForLoopEnd;
+
+	public:
+		EEventType     Type;
+		std::size_t    ID;
+		EventTimestamp Timestamp;
+	};
+
+	struct ForLoopIterBeginEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::ForLoopIterBegin;
+
+	public:
+		EEventType     Type;
+		std::uint8_t   Size;
+		std::uint8_t   Pad[6];
+		std::size_t    ID;
+		EventTimestamp Timestamp;
+		std::uint64_t  Index[2];
+	};
+
+	struct ForLoopIterEndEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::ForLoopIterEnd;
+
+	public:
+		EEventType     Type;
+		std::uint8_t   Pad[7];
+		std::size_t    ID;
+		EventTimestamp Timestamp;
+	};
+
+	struct MemAllocEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::MemAlloc;
+
+	public:
+		EEventType     Type;
+		void*          Memory;
+		std::uint64_t  Size;
+		EventTimestamp Timestamp;
+	};
+
+	struct MemFreeEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::MemFree;
+
+	public:
+		EEventType     Type;
+		void*          Memory;
+		EventTimestamp Timestamp;
+	};
+
 	class ThreadState
 	{
 	public:
-		std::uint64_t    ThreadID = 0;
-		std::atomic_bool Capture  = false;
-		Event            Buffer[128];
-		std::uint8_t     CurrentIndex  = 0;
+		std::uint64_t    ThreadID      = 0;
 		std::uint64_t    FunctionDepth = 0;
+		std::uint64_t    ForLoopDepth  = 0;
+		std::uint8_t     CurrentIndex  = 0;
+		std::atomic_bool Capture       = false;
+		Event            Buffer[128];
 	};
 
 	class State
@@ -208,6 +291,7 @@ namespace Profiler
 			ThreadsMutex.lock();
 			Threads.emplace_back(state);
 			ThreadsMutex.unlock();
+			state->Capture = Initialized && Capturing;
 		}
 
 		void removeThread(ThreadState* state)
@@ -249,25 +333,32 @@ namespace Profiler
 	extern thread_local ThreadState g_TState;
 
 	template <class T>
-	inline T& NewEvent()
+	inline T& NewEvent(ThreadState* state)
 	{
-		ThreadState& state = g_TState;
-		std::uint8_t ci    = state.CurrentIndex;
+		std::uint8_t ci = state->CurrentIndex;
 		if (ci & 0x80)
 		{
-			g_State.pushEvents(state.Buffer, 128, state.ThreadID);
+			g_State.pushEvents(state->Buffer, 128, state->ThreadID);
 			ci = 0;
 		}
-		T& elem            = *reinterpret_cast<T*>(&state.Buffer[ci]);
-		elem.Type          = T::c_Type;
-		state.CurrentIndex = ci + 1;
+		T& elem             = *reinterpret_cast<T*>(&state->Buffer[ci]);
+		elem.Type           = T::c_Type;
+		state->CurrentIndex = ci + 1;
 		return elem;
 	}
 
-	inline void FlushEvents()
+	inline void FlushEvents(ThreadState* state)
 	{
-		ThreadState& state = g_TState;
-		g_State.pushEvents(state.Buffer, state.CurrentIndex, state.ThreadID);
-		state.CurrentIndex = 0;
+		g_State.pushEvents(state->Buffer, state->CurrentIndex, state->ThreadID);
+		state->CurrentIndex = 0;
+	}
+
+	inline ThreadState* GetThreadState()
+	{
+		return &g_TState;
+	}
+
+	inline void FreeThreadState([[maybe_unused]] ThreadState* state)
+	{
 	}
 } // namespace Profiler

@@ -8,36 +8,44 @@ namespace Profiler
 {
 	namespace Detail
 	{
-		BUILD_NEVER_INLINE void ThreadBegin();
-		BUILD_NEVER_INLINE void ThreadEnd();
-		BUILD_NEVER_INLINE void HRThreadBegin();
-		BUILD_NEVER_INLINE void HRThreadEnd();
+		BUILD_NEVER_INLINE void ThreadBegin(ThreadState* state);
+		BUILD_NEVER_INLINE void ThreadEnd(ThreadState* state);
+		BUILD_NEVER_INLINE void HRThreadBegin(ThreadState* state);
+		BUILD_NEVER_INLINE void HRThreadEnd(ThreadState* state);
 	} // namespace Detail
 
 	inline void ThreadBegin()
 	{
-		g_TState.Capture = g_State.Initialized && g_State.Capturing;
-		if (g_TState.Capture)
-			Detail::ThreadBegin();
+		ThreadState* state = GetThreadState();
+		g_State.addThread(state);
+		if (state->Capture)
+			Detail::ThreadBegin(state);
 	}
 
 	inline void ThreadEnd()
 	{
-		if (g_TState.Capture)
-			Detail::ThreadEnd();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::ThreadEnd(state);
+		g_State.removeThread(state);
+		FreeThreadState(state);
 	}
 
 	inline void HRThreadBegin()
 	{
-		g_TState.Capture = g_State.Initialized && g_State.Capturing;
-		if (g_TState.Capture)
-			Detail::HRThreadBegin();
+		ThreadState* state = GetThreadState();
+		g_State.addThread(state);
+		if (state->Capture)
+			Detail::HRThreadBegin(state);
 	}
 
 	inline void HRThreadEnd()
 	{
-		if (g_TState.Capture)
-			Detail::HRThreadEnd();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::HRThreadEnd(state);
+		g_State.removeThread(state);
+		FreeThreadState(state);
 	}
 
 	struct RAIIThread

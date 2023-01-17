@@ -2,45 +2,45 @@
 
 namespace Profiler::Detail
 {
-	void ThreadBegin()
+	void ThreadBegin(ThreadState* state)
 	{
-		g_TState.ThreadID = GetThreadID();
-		g_State.addThread(&g_TState);
+		state->ThreadID = GetThreadID();
+		g_State.addThread(state);
 
-		auto& event = NewEvent<ThreadBeginEvent>();
+		auto& event = NewEvent<ThreadBeginEvent>(state);
 		CaptureLowResTimestamp(event.Timestamp);
 	}
 
-	void ThreadEnd()
+	void ThreadEnd(ThreadState* state)
 	{
-		auto& event = NewEvent<ThreadEndEvent>();
+		auto& event = NewEvent<ThreadEndEvent>(state);
 		CaptureLowResTimestamp(event.Timestamp);
-		FlushEvents();
+		FlushEvents(state);
 
-		g_State.removeThread(&g_TState);
+		g_State.removeThread(state);
 
-		if (g_TState.FunctionDepth)
+		if (state->FunctionDepth)
 			throw std::runtime_error("Thread ended with unended functions!");
 	}
 
-	void HRThreadBegin()
+	void HRThreadBegin(ThreadState* state)
 	{
-		g_TState.ThreadID = GetThreadID();
-		g_State.addThread(&g_TState);
+		state->ThreadID = GetThreadID();
+		g_State.addThread(state);
 
-		auto& event = NewEvent<ThreadBeginEvent>();
+		auto& event = NewEvent<ThreadBeginEvent>(state);
 		CaptureHighResTimestamp(event.Timestamp);
 	}
 
-	void HRThreadEnd()
+	void HRThreadEnd(ThreadState* state)
 	{
-		auto& event = NewEvent<ThreadEndEvent>();
+		auto& event = NewEvent<ThreadEndEvent>(state);
 		CaptureHighResTimestamp(event.Timestamp);
-		FlushEvents();
+		FlushEvents(state);
 
-		g_State.removeThread(&g_TState);
+		g_State.removeThread(state);
 
-		if (g_TState.FunctionDepth)
+		if (state->FunctionDepth)
 			throw std::runtime_error("Thread ended with unended functions!");
 	}
 } // namespace Profiler::Detail

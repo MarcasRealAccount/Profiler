@@ -2,22 +2,22 @@
 
 namespace Profiler::Detail
 {
-	void Frame()
+	void Frame(ThreadState* state)
 	{
-		if (g_TState.FunctionDepth)
+		if (state->FunctionDepth)
 			throw std::runtime_error("Previous frame ended with unended functions, FIX YOUR FUCKING FUNCTION CALLS!");
 
-		auto& event    = NewEvent<FrameEvent>();
+		auto& event    = NewEvent<FrameEvent>(state);
 		event.FrameNum = g_State.CurrentFrame++;
 		CaptureLowResTimestamp(event.Timestamp);
 	}
 
-	void HRFrame()
+	void HRFrame(ThreadState* state)
 	{
-		if (g_TState.FunctionDepth)
+		if (state->FunctionDepth)
 			throw std::runtime_error("Previous frame ended with unended functions, FIX YOUR FUCKING FUNCTION CALLS!");
 
-		auto& event    = NewEvent<FrameEvent>();
+		auto& event    = NewEvent<FrameEvent>(state);
 		event.FrameNum = g_State.CurrentFrame++;
 		CaptureHighResTimestamp(event.Timestamp);
 	}

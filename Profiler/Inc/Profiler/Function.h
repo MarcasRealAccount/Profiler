@@ -11,98 +11,93 @@ namespace Profiler
 {
 	namespace Detail
 	{
-		BUILD_NEVER_INLINE void FunctionBegin(void* functionPtr);
-		BUILD_NEVER_INLINE void FunctionEnd();
-		BUILD_NEVER_INLINE void HRFunctionBegin(void* functionPtr);
-		BUILD_NEVER_INLINE void HRFunctionEnd();
-		BUILD_NEVER_INLINE void BoolArg(std::uint8_t offset, bool value);
-
-		template <std::integral T>
-		BUILD_NEVER_INLINE void IntArg(std::uint8_t offset, T value, std::uint8_t base = 10)
-		{
-			auto& event  = NewEvent<IntArgumentEvent>();
-			event.Offset = offset;
-			event.Size   = sizeof(value);
-			event.Base   = base;
-			std::memcpy(event.Data, &value, sizeof(value));
-		}
-
-		template <std::floating_point T>
-		BUILD_NEVER_INLINE void FloatArg(std::uint8_t offset, T value)
-		{
-			auto& event  = NewEvent<FloatArgumentEvent>();
-			event.Offset = offset;
-			event.Size   = sizeof(value);
-			std::memcpy(event.Data, &value, sizeof(value));
-		}
-
-		template <class T>
-		BUILD_NEVER_INLINE void FlagsArg(std::uint8_t offset, Utils::Flags<T> flags)
-		{
-			auto& event     = NewEvent<FlagsArgumentEvent>();
-			event.Offset    = offset;
-			event.FlagsType = std::bit_cast<std::uint64_t>(typeid(flags));
-			std::memcpy(event.Data, &flags, sizeof(flags));
-		}
-
-		BUILD_NEVER_INLINE void PtrArg(std::uint8_t offset, void* ptr);
+		BUILD_NEVER_INLINE void FunctionBegin(ThreadState* state, void* functionPtr);
+		BUILD_NEVER_INLINE void FunctionEnd(ThreadState* state);
+		BUILD_NEVER_INLINE void HRFunctionBegin(ThreadState* state, void* functionPtr);
+		BUILD_NEVER_INLINE void HRFunctionEnd(ThreadState* state);
+		BUILD_NEVER_INLINE void BoolArg(ThreadState* state, std::uint8_t offset, bool value);
+		BUILD_NEVER_INLINE void IntArg(ThreadState* state, std::uint8_t offset, std::uint8_t size, std::uint64_t (&values)[3], std::uint8_t base = 10);
+		BUILD_NEVER_INLINE void FloatArg(ThreadState* state, std::uint8_t offset, std::uint8_t size, std::uint64_t (&values)[3]);
+		BUILD_NEVER_INLINE void FlagsArg(ThreadState* state, std::uint8_t offset, std::uint64_t flagsType, std::uint64_t (&values)[2]);
+		BUILD_NEVER_INLINE void PtrArg(ThreadState* state, std::uint8_t offset, void* ptr);
 	} // namespace Detail
 
 	inline void FunctionBegin(void* functionPtr)
 	{
-		if (g_TState.Capture)
-			Detail::FunctionBegin(functionPtr);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::FunctionBegin(state, functionPtr);
 	}
 
 	inline void FunctionEnd()
 	{
-		if (g_TState.Capture)
-			Detail::FunctionEnd();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::FunctionEnd(state);
 	}
 
 	inline void HRFunctionBegin(void* functionPtr)
 	{
-		if (g_TState.Capture)
-			Detail::HRFunctionBegin(functionPtr);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::HRFunctionBegin(state, functionPtr);
 	}
 
 	inline void HRFunctionEnd()
 	{
-		if (g_TState.Capture)
-			Detail::HRFunctionEnd();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::HRFunctionEnd(state);
 	}
 
 	inline void BoolArg(std::uint8_t offset, bool value)
 	{
-		if (g_TState.Capture)
-			Detail::BoolArg(offset, value);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::BoolArg(state, offset, value);
 	}
 
 	template <std::integral T>
 	inline void IntArg(std::uint8_t offset, T value, std::uint8_t base = 10)
 	{
-		if (g_TState.Capture)
-			Detail::IntArg<T>(offset, value, base);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+		{
+			std::uint64_t arr[3];
+			std::memcpy(arr, &value, sizeof(value));
+			Detail::IntArg(state, offset, sizeof(value), arr, base);
+		}
 	}
 
 	template <std::floating_point T>
 	inline void FloatArg(std::uint8_t offset, T value)
 	{
-		if (g_TState.Capture)
-			Detail::FloatArg<T>(offset, value);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+		{
+			std::uint64_t arr[3];
+			std::memcpy(arr, &value, sizeof(value));
+			Detail::FloatArg(state, offset, sizeof(value), arr);
+		}
 	}
 
 	template <class T>
 	inline void FlagsArg(std::uint8_t offset, Utils::Flags<T> flags)
 	{
-		if (g_TState.Capture)
-			Detail::FlagsArg<T>(offset, flags);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+		{
+			std::uint64_t arr[2];
+			std::memcpy(arr, &flags, sizeof(flags));
+			Detail::FlagsArg(state, offset, std::bit_cast<std::uint64_t>(typeid(flags)), arr);
+		}
 	}
 
 	inline void PtrArg(std::uint8_t offset, void* ptr)
 	{
-		if (g_TState.Capture)
-			Detail::PtrArg(offset, ptr);
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::PtrArg(state, offset, ptr);
 	}
 
 	struct RAIIFunction

@@ -8,8 +8,8 @@ namespace Profiler
 {
 	namespace Detail
 	{
-		BUILD_NEVER_INLINE void Frame();
-		BUILD_NEVER_INLINE void HRFrame();
+		BUILD_NEVER_INLINE void Frame(ThreadState* state);
+		BUILD_NEVER_INLINE void HRFrame(ThreadState* state);
 	} // namespace Detail
 
 	inline void Frame()
@@ -28,8 +28,9 @@ namespace Profiler
 		}
 		g_State.Capturing = newCapture;
 
-		if (g_TState.Capture)
-			Detail::Frame();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::Frame(state);
 	}
 
 	inline void HRFrame()
@@ -48,7 +49,8 @@ namespace Profiler
 		}
 		g_State.Capturing = newCapture;
 
-		if (g_TState.Capture)
-			Detail::HRFrame();
+		ThreadState* state = GetThreadState();
+		if (state->Capture)
+			Detail::HRFrame(state);
 	}
 } // namespace Profiler

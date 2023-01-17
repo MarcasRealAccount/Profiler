@@ -1,3 +1,5 @@
+pkgexts({ "premake-nasm" })
+
 workspace("Profiler")
 	common:setConfigsAndPlatforms()
 	common:addCoreDefines()
@@ -6,6 +8,7 @@ workspace("Profiler")
 	rtti("Off")
 	exceptionhandling("On")
 	flags("MultiProcessorCompile")
+	usenasm(true)
 
 	startproject("Test")
 	project("Profiler")

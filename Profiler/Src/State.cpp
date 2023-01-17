@@ -66,6 +66,25 @@ namespace Profiler
 #endif
 	}
 
+	static void CheckIBS()
+	{
+		int res[4];
+		__cpuid(res, 0x8000'0001);
+		if (!((res[2] >> 10) & 1))
+			return;
+
+		g_State.Abilities |= Abilities::IBS;
+		// TODO(MarcasRealAccount): Implement IBS
+	}
+
+	static void SetupTLS()
+	{
+	}
+
+	static void FreeTLS()
+	{
+	}
+
 	void Init()
 	{
 		g_State.Initialized = true;
@@ -82,6 +101,8 @@ namespace Profiler
 		g_State.ThreadsMutex.unlock();
 
 		CheckInvariantClock();
+		CheckIBS();
+		SetupTLS();
 	}
 
 	void Deinit()
@@ -94,8 +115,9 @@ namespace Profiler
 			tstate->Capture = false;
 			g_State.pushEvents(tstate->Buffer, tstate->CurrentIndex, tstate->ThreadID);
 			tstate->CurrentIndex = 0;
+			FreeThreadState(tstate);
 		}
-		g_State.Threads.clear();
+		FreeTLS();
 	}
 
 	void WantCapturing(bool capture, bool instant)
@@ -220,6 +242,42 @@ namespace Profiler
 		{
 			PtrArgumentEvent* data = reinterpret_cast<PtrArgumentEvent*>(event);
 			std::cout << fmt::format("    Argument {} = {}\n", data->Offset, data->Ptr);
+			break;
+		}
+		case EEventType::ForLoopBegin:
+		{
+			ForLoopBeginEvent* data = reinterpret_cast<ForLoopBeginEvent*>(event);
+			std::cout << fmt::format("For Loop Begin, id: {}, time: {}, type: {}\n", data->ID, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
+			break;
+		}
+		case EEventType::ForLoopEnd:
+		{
+			ForLoopEndEvent* data = reinterpret_cast<ForLoopEndEvent*>(event);
+			std::cout << fmt::format("For Loop End, id: {}, time: {}, type: {}\n", data->ID, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
+			break;
+		}
+		case EEventType::ForLoopIterBegin:
+		{
+			ForLoopIterBeginEvent* data = reinterpret_cast<ForLoopIterBeginEvent*>(event);
+			std::cout << fmt::format("For Loop Iter Begin {}, id: {}, time: {}, type: {}\n", data->Index[0], data->ID, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
+			break;
+		}
+		case EEventType::ForLoopIterEnd:
+		{
+			ForLoopIterEndEvent* data = reinterpret_cast<ForLoopIterEndEvent*>(event);
+			std::cout << fmt::format("For Loop Iter End, id: {}, time: {}, type: {}\n", data->ID, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
+			break;
+		}
+		case EEventType::MemAlloc:
+		{
+			MemAllocEvent* data = reinterpret_cast<MemAllocEvent*>(event);
+			std::cout << fmt::format("Mem Alloc {}, size: {}, time: {}, type: {}\n", data->Memory, data->Size, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
+			break;
+		}
+		case EEventType::MemFree:
+		{
+			MemFreeEvent* data = reinterpret_cast<MemFreeEvent*>(event);
+			std::cout << fmt::format("Mem Free {}, time: {}, type: {}\n", data->Memory, static_cast<std::uint64_t>(data->Timestamp.Time), data->Timestamp.Type ? "HR" : "LR");
 			break;
 		}
 		default:

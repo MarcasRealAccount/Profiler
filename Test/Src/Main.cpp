@@ -1,12 +1,27 @@
 #include "Utils/Core.h"
 
+#include <Profiler/ForLoop.h>
 #include <Profiler/Frame.h>
 #include <Profiler/Function.h>
+#include <Profiler/Memory.h>
 #include <Profiler/State.h>
 #include <Profiler/Thread.h>
 
 #include <array>
 #include <thread>
+
+[[nodiscard]] void* operator new(std::size_t count)
+{
+	void* ptr = std::malloc(count);
+	Profiler::MemAlloc(ptr, count);
+	return ptr;
+}
+
+void operator delete(void* ptr) noexcept
+{
+	Profiler::MemFree(ptr);
+	std::free(ptr);
+}
 
 void normalFunc()
 {
@@ -33,6 +48,24 @@ void funcWithMultipleArgs(int a, int b, int c, int d)
 	Profiler::IntArg(3, d);
 }
 
+void loopedFunc(std::size_t count)
+{
+	auto _func = Profiler::Function(&loopedFunc);
+	Profiler::IntArg(0, count);
+
+	{
+		auto _loop = Profiler::HRForLoop();
+		for (std::size_t i = 0; i < count; ++i)
+		{
+			auto _iter = Profiler::HRForLoopIter(_loop, i);
+			normalFunc();
+			auto hehe = new int();
+			*hehe     = 10;
+			delete hehe;
+		}
+	}
+}
+
 void threadFunc()
 {
 	auto _thread = Profiler::Thread();
@@ -49,9 +82,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	Profiler::WantCapturing(true, true);
 
-	std::array<std::thread, 16> threads {};
+	/*std::array<std::thread, 16> threads {};
 	for (std::size_t i = 0; i < 16; ++i)
-		threads[i] = std::thread(&threadFunc);
+		threads[i] = std::thread(&threadFunc);*/
 
 	normalFunc();
 	normalIFunc();
@@ -63,9 +96,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	normalIFunc();
 	funcWithArg(69);
 	funcWithMultipleArgs(1, 2, 3, 4);
+	loopedFunc(10);
 
-	for (std::size_t i = 0; i < 16; ++i)
-		threads[i].join();
+	/*for (std::size_t i = 0; i < 16; ++i)
+		threads[i].join();*/
 
 	Profiler::WantCapturing(false, true);
 	Profiler::WriteCaptures();
