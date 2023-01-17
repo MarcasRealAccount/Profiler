@@ -1,11 +1,6 @@
 #include "Utils/Core.h"
 
-#include <Profiler/ForLoop.h>
-#include <Profiler/Frame.h>
-#include <Profiler/Function.h>
-#include <Profiler/Memory.h>
-#include <Profiler/State.h>
-#include <Profiler/Thread.h>
+#include <Profiler/Profiler.h>
 
 #include <array>
 #include <thread>
