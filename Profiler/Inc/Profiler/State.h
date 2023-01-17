@@ -29,6 +29,7 @@ namespace Profiler
 		Frame,
 		FunctionBegin,
 		FunctionEnd,
+		Callstack,
 		BoolArgument,
 		IntArgument,
 		FloatArgument,
@@ -39,7 +40,9 @@ namespace Profiler
 		ForLoopIterBegin,
 		ForLoopIterEnd,
 		MemAlloc,
-		MemFree
+		MemFree,
+		DataHeader,
+		DataSection
 	};
 
 	struct EventTimestamp
@@ -127,6 +130,17 @@ namespace Profiler
 		EventTimestamp Timestamp;
 	};
 
+	struct CallstackEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::Callstack;
+
+	public:
+		EEventType    Type;
+		std::uint64_t DataID;
+		std::uint64_t NumEntries;
+	};
+
 	struct BoolArgumentEvent
 	{
 	public:
@@ -209,7 +223,7 @@ namespace Profiler
 
 	public:
 		EEventType     Type;
-		std::size_t    ID;
+		std::uint64_t  ID;
 		EventTimestamp Timestamp;
 	};
 
@@ -222,7 +236,7 @@ namespace Profiler
 		EEventType     Type;
 		std::uint8_t   Size;
 		std::uint8_t   Pad[6];
-		std::size_t    ID;
+		std::uint64_t  ID;
 		EventTimestamp Timestamp;
 		std::uint64_t  Index[2];
 	};
@@ -235,7 +249,7 @@ namespace Profiler
 	public:
 		EEventType     Type;
 		std::uint8_t   Pad[7];
-		std::size_t    ID;
+		std::uint64_t  ID;
 		EventTimestamp Timestamp;
 	};
 
@@ -262,7 +276,24 @@ namespace Profiler
 		EventTimestamp Timestamp;
 	};
 
-	class ThreadState
+	struct DataHeaderEvent
+	{
+	public:
+		static constexpr EEventType c_Type = EEventType::DataHeader;
+
+	public:
+		EEventType    Type;
+		std::uint64_t Size;
+		std::uint64_t ID;
+	};
+
+	struct DataSectionEvent
+	{
+	public:
+		std::uint8_t Data[32];
+	};
+
+	class alignas(32) ThreadState
 	{
 	public:
 		std::uint64_t    ThreadID      = 0;
@@ -311,7 +342,8 @@ namespace Profiler
 		std::vector<Event> Events;
 		std::mutex         EventMutex;
 
-		std::uint64_t CurrentFrame = 0;
+		std::uint64_t        CurrentFrame  = 0;
+		std::atomic_uint64_t CurrentDataID = 0;
 
 		std::uint64_t InvariantClockFrequency = 0;
 
@@ -332,6 +364,11 @@ namespace Profiler
 
 	extern thread_local ThreadState g_TState;
 
+	inline std::uint64_t NewDataID()
+	{
+		return g_State.CurrentDataID++;
+	}
+
 	template <class T>
 	inline T& NewEvent(ThreadState* state)
 	{
@@ -341,8 +378,9 @@ namespace Profiler
 			g_State.pushEvents(state->Buffer, 128, state->ThreadID);
 			ci = 0;
 		}
-		T& elem             = *reinterpret_cast<T*>(&state->Buffer[ci]);
-		elem.Type           = T::c_Type;
+		T& elem = *reinterpret_cast<T*>(&state->Buffer[ci]);
+		if constexpr (requires { T::c_Type; })
+			elem.Type = T::c_Type;
 		state->CurrentIndex = ci + 1;
 		return elem;
 	}
