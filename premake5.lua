@@ -26,6 +26,30 @@ workspace("Profiler")
 
 		common:addActions()
 
+	project("GUI")
+		location("GUI/")
+		warnings("Extra")
+
+		common:outDirs()
+		common:debugDir()
+
+		filter("configurations:Debug")
+			kind("ConsoleApp")
+		filter("configurations:not Debug")
+			kind("WindowedApp")
+		filter({})
+
+		includedirs({ "%{prj.location}/Src/" })
+		files({ "%{prj.location}/Src/**" })
+		removefiles({ "*.DS_Store" })
+
+		links({ "Profiler" })
+		externalincludedirs({ "Profiler/Inc/" })
+
+		pkgdeps({ "glfw", "imgui-docking" })
+
+		common:addActions()
+
 	project("Test")
 		location("Test/")
 		warnings("Extra")
