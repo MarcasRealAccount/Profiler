@@ -43,10 +43,17 @@ workspace("Profiler")
 		files({ "%{prj.location}/Src/**" })
 		removefiles({ "*.DS_Store" })
 
-		links({ "Profiler" })
-		externalincludedirs({ "Profiler/Inc/" })
+		links({ "Profiler", "glad" })
+		externalincludedirs({
+			"Profiler/Inc/",
+			"ThirdParty/glad/include/"
+		})
 
-		pkgdeps({ "glfw", "imgui-docking" })
+		pkgdeps({ "fmt", "glfw", "imgui-docking" })
+
+		filter("system:windows")
+			links({ "opengl32.lib" })
+		filter({})
 
 		common:addActions()
 
@@ -67,3 +74,17 @@ workspace("Profiler")
 		externalincludedirs({ "Profiler/Inc/" })
 
 		common:addActions()
+
+	project("glad")
+		location("ThirdParty/glad/")
+		warnings("Off")
+		
+		common:outDirs(true)
+		kind("StaticLib")
+		
+		includedirs({ "%{prj.location}/include/" })
+		files({
+			"%{prj.location}/include/**",
+			"%{prj.location}/src/**"
+		})
+		removefiles({ "*.DS_Store" })

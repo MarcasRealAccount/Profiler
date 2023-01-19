@@ -41,8 +41,7 @@ namespace Profiler
 		ForLoopIterEnd,
 		MemAlloc,
 		MemFree,
-		DataHeader,
-		DataSection
+		DataHeader
 	};
 
 	struct EventTimestamp

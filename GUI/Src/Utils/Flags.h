@@ -34,7 +34,7 @@ namespace Utils
 							HasEquals<T> && HasLessThan<T> && HasGreaterThan<T>;
 	} // namespace Detail
 
-	template <Detail::Flaggable T>
+	template <Detail::Flaggable T = std::uint32_t>
 	struct Flags
 	{
 	public:
