@@ -75,6 +75,7 @@ workspace("Profiler")
 
 		common:addActions()
 
+	group("Dependencies")
 	project("glad")
 		location("ThirdParty/glad/")
 		warnings("Off")
