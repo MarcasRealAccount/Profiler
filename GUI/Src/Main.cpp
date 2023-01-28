@@ -61,9 +61,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330 core");
 
-	bool             showDemoWindow = true;
-	bool             showCPUCores   = true;
-	UI::CPUCoresData cpuCoresData {};
+	bool showDemoWindow = true;
+	bool showCPUCores   = true;
+	// UI::CPUCoresData cpuCoresData {};
+	UI::TimelineOptions timelineOptions {};
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -118,7 +119,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		}
 
 		if (showCPUCores)
-			UI::ShowCPUCores(&showCPUCores, &cpuCoresData, 1.0f / 144.0f);
+		{
+			ImGui::Begin("Timeline", &showCPUCores);
+
+			UI::DefaultTimelineStyle(&timelineOptions);
+			UI::DrawTimescale(&timelineOptions);
+
+			ImGui::End();
+		}
+		// UI::ShowCPUCores(&showCPUCores, &cpuCoresData, 1.0f / 144.0f);
 
 		if (showDemoWindow)
 			ImGui::ShowDemoWindow(&showDemoWindow);
