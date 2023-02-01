@@ -41,11 +41,13 @@ namespace UI
 	{
 	public:
 		// State
-		double        TimeScale  = 1.0 / 4.5e9; // Seconds per timestep
-		std::uint64_t Offset     = 0;           // Timestep offset
-		double        Scale      = 1.0;         // Timesteps per pixel
-		double        InvScale   = 1.0;         // Pixels per timestep
-		double        OffsetFrac = 0.0;         // Offset inside timestep
+		double SampleRate    = 4.5e9;       // Timesteps per second
+		double InvSampleRate = 1.0 / 4.5e9; // Seconds per timestep
+		double Offset        = 0.0;         // Offset inside timestep
+		double Scale         = 1.0;         // Timesteps per pixel
+		double InvScale      = 1.0;         // Pixels per timestep
+
+		// std::uint64_t Offset     = 0;           // Timestep offset
 
 		// Style
 		bool          Borders             = false;

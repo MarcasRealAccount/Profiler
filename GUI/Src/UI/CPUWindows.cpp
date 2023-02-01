@@ -335,14 +335,40 @@ namespace UI
 	//	ImGui::End();
 	//}
 
-	float Clamp(float x, float min, float max)
+	template <std::floating_point T>
+	T Clamp(T x, std::type_identity_t<T> min, std::type_identity_t<T> max)
 	{
 		return std::min(std::max(x, min), max);
 	}
 
-	float Floor(float x)
+	template <std::floating_point T>
+	T Floor(T x)
 	{
-		return x < 0.0f ? std::ceilf(x) : std::ceilf(x);
+		return x < T { 0 } ? std::floor(x) : std::floor(x);
+	}
+
+	template <std::floating_point T>
+	T Ceil(T x)
+	{
+		return x < T { 0 } ? std::ceil(x) : std::ceil(x);
+	}
+
+	template <std::floating_point T>
+	T FloorToBoundary(T x, T scale)
+	{
+		return Floor(x / scale) * scale;
+	}
+
+	template <std::floating_point T>
+	T CeilToBoundary(T x, T scale)
+	{
+		return Ceil(x / scale) * scale;
+	}
+
+	template <std::floating_point T>
+	T Frac(T x)
+	{
+		return x - std::floor(x);
 	}
 
 	std::string_view GetTimeSuffix(std::int32_t scale)
@@ -357,7 +383,7 @@ namespace UI
 		case -15: return "fs";
 		case -12: return "ps";
 		case -9: return "ns";
-		case -6: return "\u00B5s";
+		case -6: return "\xc2\xb5s";
 		case -3: return "ms";
 		case 0: return "s";
 		case 3: return "ks";
@@ -376,17 +402,17 @@ namespace UI
 
 	double TimestampToScreenX(std::uint64_t timestamp, TimelineOptions* options)
 	{
-		return ((timestamp - options->Offset) - options->OffsetFrac) * options->InvScale;
+		return (timestamp - options->Offset) * options->InvScale;
 	}
 
 	std::uint64_t ScreenXToTimestamp(double x, TimelineOptions* options)
 	{
-		return static_cast<std::uint64_t>((x * options->Scale) + options->OffsetFrac) + options->Offset;
+		return static_cast<std::uint64_t>(x * options->Scale + options->Offset);
 	}
 
 	double ScreenXToSeconds(double x, double spx, TimelineOptions* options)
 	{
-		return x * spx + options->Offset * options->TimeScale + options->OffsetFrac * options->TimeScale;
+		return x * spx + options->Offset * options->InvSampleRate;
 	}
 
 	void DefaultTimelineStyle(TimelineOptions* options)
@@ -401,6 +427,21 @@ namespace UI
 		options->TimeColor           = ImGui::GetColorU32(ImGuiCol_Separator);
 		options->LargeBarHeight      = ImGui::GetTextLineHeight();
 		options->SmallBarHeight      = options->LargeBarHeight * 0.5f;
+	}
+
+	void DrawLargeBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, ImRect& timeBB, float x, double baseTime, std::int32_t baseScale, double t, std::int32_t scale)
+	{
+		std::string_view baseSuffix = GetTimeSuffix(baseScale);
+		std::string_view suffix     = GetTimeSuffix(scale);
+		std::string      str        = baseScale > scale ? fmt::format("{:.2f}{} + {:.2f}{}", baseTime, baseSuffix, t, suffix)
+														: fmt::format("{:.2f}{}", t, suffix);
+		auto             textWidth  = ImGui::CalcTextSize(str.c_str(), str.c_str() + str.size()).x;
+		ImVec2           textPos    = { timeBB.Min.x + Clamp(x - textWidth * 0.5f, 0.0f, timeBB.GetWidth() - textWidth), timeBB.Min.y };
+
+		ImVec2 p  = { barsBB.Min.x + x, barsBB.Min.y };
+		ImVec2 p2 = { p.x, p.y + options->LargeBarHeight };
+		window->DrawList->AddLine(p, p2, options->LargeBarColor);
+		window->DrawList->AddText(textPos, options->TimeColor, str.c_str(), str.c_str() + str.size());
 	}
 
 	void DrawTimescale(TimelineOptions* options)
@@ -428,51 +469,52 @@ namespace UI
 		ImGui::ItemAdd(totalBB, 0);
 		ImGui::ItemSize(totalBB);
 
-		// s/dt * dt/px = s/px
-		double           secondsPerPixel = options->TimeScale * options->Scale;
-		double           pixelsPerSecond = 1.0 / secondsPerPixel;
-		std::int32_t     scale           = static_cast<std::int32_t>(Floor(std::log10(secondsPerPixel * 50.0)));
-		double           rescaled        = std::pow(10.0, scale);
-		std::int32_t     baseScale       = (scale < 0 ? (scale - 2) : scale) / 3 * 3;
-		double           baseRescaled    = std::pow(10.0, baseScale);
-		std::string_view suffix          = GetTimeSuffix(baseScale);
-		double           ts              = (options->Offset + options->OffsetFrac) * options->TimeScale;
-		double           baseTime        = ts / baseRescaled;
-		float            startX          = -(options->Offset * options->InvScale);
-		std::int16_t     startTime       = 0;
-		float            deltaX          = static_cast<float>(baseRescaled * pixelsPerSecond);
-		std::uint8_t     largeBars       = static_cast<std::uint8_t>(std::floor((width + deltaX - 1) / deltaX));
-		std::int16_t     deltaTime       = static_cast<std::int16_t>(std::powf(10, scale - baseScale));
-		float            smallDeltaX     = deltaX / (options->SmallBars + 1);
-		for (std::uint8_t i = 0; i < largeBars; ++i)
-		{
-			float        x         = startX + i * deltaX;
-			ImVec2       p         = { barsBB.Min.x + x, barsBB.Min.y };
-			ImVec2       p2        = { p.x, p.y + options->LargeBarHeight };
-			std::int16_t time      = startTime + i * deltaTime;
-			std::string  str       = fmt::format("{:.2f}{}", ts + time, suffix);
-			float        textWidth = ImGui::CalcTextSize(str.c_str()).x;
-			ImVec2       tp        = { timeBB.Min.x + Clamp(x - textWidth * 0.5f, 0.0f, width - textWidth), timeBB.Min.y };
+		// TODO(MarcasRealAccount): Make the deltaX range between 120px to 250px
+		// TODO(MarcasRealAccount): Handle negative offsets
 
-			if (i == 0)
+		double spp = options->InvSampleRate * options->Scale;
+		double pps = options->SampleRate * options->InvScale;
+
+		double           offsetTime        = options->Offset * options->InvSampleRate;
+		double           deltaTime         = 120.0 * spp;
+		std::int64_t     offsetScalel      = offsetTime == 0.0 ? (1LL << 63LL) : static_cast<std::int64_t>(Ceil(std::log10(offsetTime) - 1));
+		std::int64_t     baseOffsetScalel  = offsetTime == 0.0 ? (1LL << 63LL) : (offsetScalel < 0 ? (offsetScalel - 2) : offsetScalel) / 3 * 3;
+		std::int64_t     deltaScalel       = static_cast<std::int64_t>(Ceil(std::log10(deltaTime)));
+		std::int64_t     baseDeltaScalel   = (deltaScalel < 0 ? (deltaScalel - 2) : deltaScalel) / 3 * 3;
+		double           baseOffsetScale   = std::pow(10.0, baseOffsetScalel);
+		double           deltaScale        = std::pow(10.0, deltaScalel);
+		double           baseDeltaScale    = std::pow(10.0, baseDeltaScalel);
+		double           upperDeltaScale   = deltaScale * 10.0;
+		double           startTime         = Frac(offsetTime / upperDeltaScale) * upperDeltaScale;
+		double           baseTime          = offsetTime - startTime;
+		double           startTimeBoundary = CeilToBoundary(startTime, deltaScale);
+		double           startX            = (startTimeBoundary - startTime) * pps;
+		double           deltaX            = deltaScale * pps;
+		std::uint64_t    largeBars         = static_cast<std::uint64_t>(Ceil(width / deltaX));
+		std::string_view baseSuffix        = GetTimeSuffix(baseOffsetScalel);
+		std::string_view suffix            = GetTimeSuffix(baseDeltaScalel);
+		for (std::uint64_t i = 0; i < largeBars; ++i)
+		{
+			double x = startX + deltaX * i;
+			if (x > width)
+				break;
+			double       t        = startTimeBoundary + deltaScale * i;
+			double       bts      = baseTime / baseOffsetScale;
+			double       ts       = t / baseDeltaScale;
+			std::int32_t btsScale = baseOffsetScalel;
+			std::int32_t tsScale  = baseDeltaScalel;
+			if (ts > 900.0)
 			{
-				// TODO(MarcasRealAccount): Move this outside of the for loop, and only draw the required bars
-				for (std::uint8_t j = 0; j < options->SmallBars; ++j)
+				bts += 1000.0 * std::pow(10.0, tsScale - btsScale);
+				if (bts > 999.9)
 				{
-					ImVec2 sp  = { p.x - (j + 1) * smallDeltaX, p.y };
-					ImVec2 sp2 = { sp.x, sp.y + options->SmallBarHeight };
-					window->DrawList->AddLine(sp, sp2, options->SmallBarColor);
+					bts      *= 0.001;
+					btsScale += 3;
 				}
+				ts -= 1000.0;
+				ts = std::abs(ts);
 			}
-			// TODO(MarcasRealAccount): Stop drawing the last set of bars in the for loop, and only draw the required bars
-			for (std::uint8_t j = 0; j < options->SmallBars; ++j)
-			{
-				ImVec2 sp  = { p.x + (j + 1) * smallDeltaX, p.y };
-				ImVec2 sp2 = { sp.x, sp.y + options->SmallBarHeight };
-				window->DrawList->AddLine(sp, sp2, options->SmallBarColor);
-			}
-			window->DrawList->AddLine(p, p2, options->LargeBarColor);
-			window->DrawList->AddText(tp, options->TimeColor, str.c_str());
+			DrawLargeBar(options, window, barsBB, timeBB, x, bts, btsScale, ts, tsScale);
 		}
 	}
 
