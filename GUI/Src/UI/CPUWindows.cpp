@@ -102,26 +102,33 @@ namespace UI
 		options->DefaultEntryColor   = ImGui::GetColorU32(ImGuiCol_PlotLines);
 		options->LightEntryTextColor = ImGui::GetColorU32(ImGuiCol_Text);
 		options->DarkEntryTextColor  = 255 << 24 | (255 - (options->LightEntryTextColor >> 16) & 0xFF) << 16 | (255 - (options->LightEntryTextColor >> 8) & 0xFF) << 8 | 255 - options->LightEntryTextColor & 0xFF;
-		options->LargeBarColor       = ImGui::GetColorU32(ImGuiCol_Separator);
-		options->SmallBarColor       = ImGui::GetColorU32(ImGuiCol_Separator);
-		options->TimeColor           = ImGui::GetColorU32(ImGuiCol_Separator);
+		options->LargeBarColor       = ImGui::GetColorU32(ImGuiCol_Text);
+		options->SmallBarColor       = ImGui::GetColorU32(ImGuiCol_Text);
+		options->TimeColor           = ImGui::GetColorU32(ImGuiCol_Text);
 		options->LargeBarHeight      = ImGui::GetTextLineHeight();
 		options->SmallBarHeight      = options->LargeBarHeight * 0.5f;
 	}
 
-	void DrawLargeBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, ImRect& timeBB, float x, double baseTime, std::int32_t baseScale, double t, std::int32_t scale)
+	void DrawLargeBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, ImRect& timeBB, float x, double baseTime, std::int64_t baseScale, double t, std::int64_t scale)
 	{
 		std::string_view baseSuffix = GetTimeSuffix(baseScale);
 		std::string_view suffix     = GetTimeSuffix(scale);
-		std::string      str        = baseScale > scale ? fmt::format("{:.2f}{} + {:.2f}{}", baseTime, baseSuffix, t, suffix)
-														: fmt::format("{:.2f}{}", t, suffix);
+		std::string      str        = baseScale > scale ? fmt::format("{:.2f}{} + {:.0f}{}", baseTime, baseSuffix, t, suffix)
+														: fmt::format("{:.0f}{}", t, suffix);
 		auto             textWidth  = ImGui::CalcTextSize(str.c_str(), str.c_str() + str.size()).x;
-		ImVec2           textPos    = { timeBB.Min.x + Clamp(x - textWidth * 0.5f, 0.0f, timeBB.GetWidth() - textWidth), timeBB.Min.y };
+		ImVec2           textPos    = { timeBB.Min.x + /*Clamp(*/ x - textWidth * 0.5f /*, 0.0f, timeBB.GetWidth() - textWidth)*/, timeBB.Min.y };
 
 		ImVec2 p  = { barsBB.Min.x + x, barsBB.Min.y };
 		ImVec2 p2 = { p.x, p.y + options->LargeBarHeight };
 		window->DrawList->AddLine(p, p2, options->LargeBarColor);
 		window->DrawList->AddText(textPos, options->TimeColor, str.c_str(), str.c_str() + str.size());
+	}
+
+	void DrawSmallBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, ImRect& timeBB, float x)
+	{
+		ImVec2 p  = { barsBB.Min.x + x, barsBB.Min.y };
+		ImVec2 p2 = { p.x, p.y + options->SmallBarHeight };
+		window->DrawList->AddLine(p, p2, options->SmallBarColor);
 	}
 
 	void DrawTimescale(TimelineOptions* options)
@@ -154,7 +161,6 @@ namespace UI
 
 		// TODO(MarcasRealAccount): Make the deltaX range between 120px to 250px
 		// TODO(MarcasRealAccount): Handle negative offsets
-		// TODO(MarcasRealAccount): Fix nans when offset=0
 		// TODO(MarcasRealAccount): Fix startTimeBoundary resetting to 0 when the scale is not in 100s (When deltaScale is -8 and offset goes across 10ns, the drawn text shows 0ns)
 
 		double spp = options->InvSampleRate * options->Scale;
@@ -177,6 +183,7 @@ namespace UI
 		double           startTimeBoundary = CeilToBoundary(startTime, deltaScale);
 		double           startX            = (startTimeBoundary - startTime) * pps;
 		double           deltaX            = deltaScale * pps;
+		double           smallDeltaX       = deltaX / (options->SmallBars + 1);
 		std::uint64_t    largeBars         = static_cast<std::uint64_t>(Ceil(width / deltaX));
 		std::string_view baseSuffix        = GetTimeSuffix(baseOffsetScalel);
 		std::string_view suffix            = GetTimeSuffix(baseDeltaScalel);
@@ -188,8 +195,8 @@ namespace UI
 			double       t        = startTimeBoundary + deltaScale * i;
 			double       bts      = baseTime / baseOffsetScale;
 			double       ts       = t / baseDeltaScale;
-			std::int32_t btsScale = baseOffsetScalel;
-			std::int32_t tsScale  = baseDeltaScalel;
+			std::int64_t btsScale = baseOffsetScalel;
+			std::int64_t tsScale  = baseDeltaScalel;
 			if (ts > 900.0)
 			{
 				bts += 1000.0 * std::pow(10.0, tsScale - btsScale);
@@ -201,7 +208,12 @@ namespace UI
 				ts -= 1000.0;
 				ts = std::abs(ts);
 			}
-			DrawLargeBar(options, window, barsBB, timeBB, x, bts, btsScale, ts, tsScale);
+			if (i == 0)
+				for (std::int64_t j = -1; j >= -options->SmallBars; --j)
+					DrawSmallBar(options, window, barsBB, timeBB, x + smallDeltaX * j);
+			for (std::int64_t j = 1; j <= options->SmallBars; ++j)
+				DrawSmallBar(options, window, barsBB, timeBB, x + smallDeltaX * j);
+			DrawLargeBar(options, window, barsBB, timeBB, x, offsetTime == 0.0 ? 0.0 : bts, offsetTime == 0.0 ? 1LL << 63LL : btsScale, ts, tsScale);
 		}
 	}
 
@@ -253,36 +265,40 @@ namespace UI
 			if (entry.End < options->Offset)
 				continue;
 			if (entry.Begin > endOffset)
-				continue;
+				return;
 
-			double bx = Clamp((entry.Begin - options->Offset) * options->InvScale, 0.0, width);
-			double ex = Clamp((entry.End - options->Offset) * options->InvScale, 0.0, width);
+			double bx = /*Clamp(*/ (entry.Begin - options->Offset) * options->InvScale /*, 0.0, width)*/;
+			double ex = /*Clamp(*/ (entry.End - options->Offset) * options->InvScale /*, 0.0, width)*/;
 			double dx = ex - bx;
 			if (dx < 5.0)
 				continue;
 
 			std::uint8_t alpha = 255;
-			if (dx < 10.0)
-				alpha = static_cast<std::uint8_t>((dx - 5.0) / 5.0 * 255.0);
+			// if (dx < 10.0)
+			//	alpha = static_cast<std::uint8_t>((dx - 5.0) / 5.0 * 255.0);
 			std::uint32_t color = entry.Color & 0xFF'FF'FF | alpha << 24;
 
 			ImVec2 entryMin { static_cast<float>(contentBB.Min.x + bx), contentBB.Min.y };
 			ImVec2 entryMax { static_cast<float>(contentBB.Min.x + ex), contentBB.Max.y };
-
+			entryMin.x = Clamp(entryMin.x, contentBB.Min.x, contentBB.Max.x);
+			entryMax.x = Clamp(entryMax.x, contentBB.Min.x, contentBB.Max.x);
 			window->DrawList->AddRectFilled(entryMin, entryMax, color);
 			if (mp.x >= entryMin.x && mp.y >= entryMin.y && mp.x <= entryMax.x && mp.y <= entryMax.y)
 				window->DrawList->AddRect(entryMin, entryMax, 0xFF'FF'FF'FF);
 
-			double textWidth = ImGui::CalcTextSize(entry.Text).x;
-			double innerSize = ex - bx - style->ItemInnerSpacing.x * 2;
-			if (textWidth < innerSize)
+			if (entry.Text)
 			{
-				double   luminance = 0.2126 / 255 * ((entry.Color >> 16) & 0xFF) + 0.7152 / 255 * ((entry.Color >> 8) & 0xFF) + 0.0722 / 255 * (entry.Color & 0xFF);
-				uint32_t textColor = luminance > 0.5 ? options->DarkEntryTextColor : options->LightEntryTextColor;
-				window->DrawList->AddText({ static_cast<float>(contentBB.Min.x + bx + (ex - bx - textWidth) * 0.5f),
-											static_cast<float>(contentBB.Min.y + style->ItemInnerSpacing.y) },
-										  textColor,
-										  entry.Text);
+				double textWidth = ImGui::CalcTextSize(entry.Text).x;
+				double innerSize = ex - bx - style->ItemInnerSpacing.x * 2;
+				if (textWidth < innerSize)
+				{
+					double   luminance = 0.2126 / 255 * ((entry.Color >> 16) & 0xFF) + 0.7152 / 255 * ((entry.Color >> 8) & 0xFF) + 0.0722 / 255 * (entry.Color & 0xFF);
+					uint32_t textColor = luminance > 0.5 ? options->DarkEntryTextColor : options->LightEntryTextColor;
+					double   tp        = Clamp(bx + (ex - bx - textWidth) * 0.5, style->ItemInnerSpacing.x, width - textWidth - style->ItemInnerSpacing.x);
+					tp                 = Clamp(tp, bx + style->ItemInnerSpacing.x, ex - textWidth - style->ItemInnerSpacing.x);
+					ImVec2 textPos { static_cast<float>(contentBB.Min.x + tp), static_cast<float>(contentBB.Min.y + style->ItemInnerSpacing.y) };
+					window->DrawList->AddText(textPos, textColor, entry.Text);
+				}
 			}
 		}
 	}
@@ -302,7 +318,36 @@ namespace UI
 		return 0.0f;
 	}
 
-	void TimelineDraggingInWindow(TimelineOptions* options, double invDeltaTime)
+	void TimelineZoomingInWindow(TimelineOptions* options, double invDeltaTime)
+	{
+		if (options->Scale == 0.0)
+			return;
+
+		if (!ImGui::IsWindowHovered())
+			return;
+
+		ImGuiWindow* window = ImGui::GetCurrentWindow();
+		if (window->SkipItems)
+			return;
+
+		ImGuiContext* ctx   = ImGui::GetCurrentContext();
+		ImGuiStyle*   style = &ctx->Style;
+		ImGuiIO*      io    = &ctx->IO;
+
+		double mouseX = ImGui::GetMousePos().x - window->Pos.x - style->WindowPadding.x;
+
+		double wheelY = io->MouseWheel;
+		if ((ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) && wheelY != 0.0)
+		{
+			double curWX        = mouseX * options->Scale;
+			options->ZoomLevel  = std::floor(options->ZoomLevel) - wheelY;
+			double nextZoom     = 20.0 * std::pow(1.2, options->ZoomLevel);
+			double nextWX       = mouseX * nextZoom;
+			options->NextOffset += curWX - nextWX;
+		}
+	}
+
+	void TimelineOffsettingInWindow(TimelineOptions* options, double invDeltaTime)
 	{
 		// TODO(MarcasRealAccount): Make window focused when right clicking when starting to drag
 		if (options->Scale == 0.0)
@@ -326,21 +371,24 @@ namespace UI
 			if (options->PreviousDrag == 0.0)
 				options->PreviousDrag = drag;
 			double deltaDrag      = options->PreviousDrag - drag;
-			double dragVel        = deltaDrag * options->InvScale;
+			double dragVel        = deltaDrag * options->Scale;
 			options->PreviousDrag = drag;
 			options->OffsetVel    = dragVel * invDeltaTime;
 		}
 		else if (options->PreviousDrag != 0.0)
 		{
-			options->OffsetVel    = options->OffsetVel;
 			options->PreviousDrag = 0.0;
 		}
 	}
 
 	void TimelineStateUpdate(TimelineOptions* options, double deltaTime)
 	{
-		options->Offset    += options->OffsetVel * deltaTime;
-		options->OffsetVel = std::lerp(options->OffsetVel, 0.0, 6.5 * deltaTime);
+		options->Scale      = 20.0 * std::pow(1.2, options->ZoomLevel);
+		options->InvScale   = 1.0 / options->Scale;
+		options->Offset     = options->NextOffset;
+		options->Offset     += options->OffsetVel * deltaTime;
+		options->NextOffset = options->Offset;
+		options->OffsetVel  = std::lerp(options->OffsetVel, 0.0, 6.5 * deltaTime);
 		if (options->OffsetVel > -1e-4 && options->OffsetVel < 1e-4)
 			options->OffsetVel = 0.0;
 	}
