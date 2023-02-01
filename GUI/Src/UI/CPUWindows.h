@@ -5,45 +5,13 @@
 
 namespace UI
 {
-	/*struct SmoothFloat
-	{
-	public:
-		void tick(float deltaTime);
-
-		void reset() { Time = 0.0f; }
-
-		operator float() const { return Current; }
-
-		float Current;
-
-		float Target;
-		float Origin;
-		float Time;
-	};
-
-	struct CPUCoresData
-	{
-	public:
-		float OffsetVel       = 0.0f;
-		float PreviousDrag    = 0.0f;
-		float PreviousDragVel = 0.0f;
-
-		float ZoomLevel = 1.0f;
-		float Offset    = 0.0f;
-
-		float Zoom    = 1.0f;
-		float InvZoom = 1.0f;
-	};
-
-	void ShowCPUCores(bool* p_open, CPUCoresData* data, float deltaTime);*/
-
 	struct TimelineOptions
 	{
 	public:
 		// State
 		double SampleRate    = 4.5e9;       // Timesteps per second
 		double InvSampleRate = 1.0 / 4.5e9; // Seconds per timestep
-		double Offset        = 0.0;         // Offset inside timestep
+		double Offset        = 0.0;         // Timestep offset
 		double Scale         = 1.0;         // Timesteps per pixel
 		double InvScale      = 1.0;         // Pixels per timestep
 

@@ -64,7 +64,29 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	bool showDemoWindow = true;
 	bool showCPUCores   = true;
 	// UI::CPUCoresData cpuCoresData {};
-	UI::TimelineOptions timelineOptions {};
+	UI::TimelineOptions            timelineOptions {};
+	std::vector<UI::TimelineEntry> cpu0Timeline {
+		{0,     10,   "Thread0",             0U << 16U | 0U << 8 | 0U      },
+		{ 20,   40,   "Thread1",             0U << 16U | 0U << 8 | 255U    },
+		{ 41,   42,   "Thread5",             0U << 16U | 255U << 8 | 0U    },
+		{ 43,   49,   "Thread0",             255U << 16U | 0U << 8 | 0U    },
+		{ 69,   120,  "Thread7",             0U << 16U | 255U << 8 | 255U  },
+		{ 125,  354,  "Shit",                255U << 16U | 255U << 8 | 0U  },
+		{ 354,  359,  "Fuck",                255U << 16U | 255U << 8 | 255U},
+		{ 400,  450,  "Idk",                 127U << 16U | 127U << 8 | 0U  },
+		{ 451,  900,  "Cool",                127U << 16U | 127U << 8 | 127U},
+		{ 901,  905,  "Idk",                 37U << 16U | 65U << 8 | 210U  },
+		{ 1000, 1200, "WeDead",              0U << 16U | 0U << 8 | 0U      },
+		{ 1250, 1350, "PerformanceThread",   0U << 16U | 0U << 8 | 0U      },
+		{ 1351, 1355, "InversePerformance",  0U << 16U | 0U << 8 | 0U      },
+		{ 1356, 1357, "InfinitePower",       0U << 16U | 0U << 8 | 0U      },
+		{ 1358, 1359, "WeSickos",            0U << 16U | 0U << 8 | 0U      },
+		{ 1360, 1361, "EverySickoOutThere",  0U << 16U | 0U << 8 | 0U      },
+		{ 1362, 1363, "Damn",                0U << 16U | 0U << 8 | 0U      },
+		{ 1364, 1365, "Poggers",             0U << 16U | 0U << 8 | 0U      },
+		{ 1366, 1367, "KJhasdjkhajksdh",     0U << 16U | 0U << 8 | 0U      },
+		{ 1368, 1369, "DafuqHappenedThere?", 0U << 16U | 0U << 8 | 0U      },
+	};
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -124,6 +146,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 			UI::DefaultTimelineStyle(&timelineOptions);
 			UI::DrawTimescale(&timelineOptions);
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 
 			ImGui::End();
 		}
