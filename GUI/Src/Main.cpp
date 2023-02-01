@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <chrono>
 #include <vector>
 
 #define GLFW_INCLUDE_NONE
@@ -63,10 +64,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330 core");
 
-	bool showDemoWindow = true;
-	bool showCoresView  = true;
-	bool showThreadView = true;
-	// UI::CPUCoresData cpuCoresData {};
+	bool                           showDemoWindow = true;
+	bool                           showCoresView  = true;
+	bool                           showThreadView = true;
 	UI::TimelineOptions            timelineOptions {};
 	std::vector<UI::TimelineEntry> cpu0Timeline {
 		{0,     10,   "Thread0",             0U << 16U | 0U << 8 | 0U      },
@@ -91,9 +91,17 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		{ 1368, 1369, "DafuqHappenedThere?", 0U << 16U | 0U << 8 | 0U      },
 	};
 
+	using Clock            = std::chrono::high_resolution_clock;
+	auto previousFrameTime = Clock::now();
 	while (!glfwWindowShouldClose(window))
 	{
+		auto   currentFrameTime = Clock::now();
+		double deltaTime        = std::chrono::duration_cast<std::chrono::duration<double>>(currentFrameTime - previousFrameTime).count();
+		double invDeltaTime     = 1.0 / deltaTime;
+		previousFrameTime       = currentFrameTime;
 		glfwPollEvents();
+
+		UI::TimelineStateUpdate(&timelineOptions, deltaTime);
 
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -145,32 +153,31 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			ImGui::EndMainMenuBar();
 		}
 
-		if (showCPUCores)
 		if (showCoresView)
 		{
 			ImGui::Begin("Cores View##CoresView", &showCoresView);
 
-
-
 			UI::DefaultTimelineStyle(&timelineOptions);
+
+			UI::TimelineDraggingInWindow(&timelineOptions, invDeltaTime);
 			UI::DrawTimescale(&timelineOptions);
 			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
 			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
 
 			ImGui::End();
 		}
@@ -179,6 +186,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		{
 			ImGui::Begin("Thread View##ThreadView", &showThreadView);
 
+			UI::DefaultTimelineStyle(&timelineOptions);
+
+			UI::TimelineDraggingInWindow(&timelineOptions, invDeltaTime);
 			UI::DrawTimescale(&timelineOptions);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 

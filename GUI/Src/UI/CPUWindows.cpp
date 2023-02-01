@@ -286,4 +286,62 @@ namespace UI
 			}
 		}
 	}
+
+	float GetMouseDragDeltaX(ImGuiMouseButton button, bool* down, float lock_threshold = -1.0f)
+	{
+		ImGuiContext& g = *GImGui;
+		IM_ASSERT(button >= 0 && button < IM_ARRAYSIZE(g.IO.MouseDown));
+		if (lock_threshold < 0.0f)
+			lock_threshold = g.IO.MouseDragThreshold;
+		if (down)
+			*down = g.IO.MouseDown[button];
+		if (g.IO.MouseDown[button] || g.IO.MouseReleased[button])
+			if (g.IO.MouseDragMaxDistanceSqr[button] >= lock_threshold * lock_threshold)
+				if (ImGui::IsMousePosValid(&g.IO.MousePos) && ImGui::IsMousePosValid(&g.IO.MouseClickedPos[button]))
+					return g.IO.MousePos.x - g.IO.MouseClickedPos[button].x;
+		return 0.0f;
+	}
+
+	void TimelineDraggingInWindow(TimelineOptions* options, double invDeltaTime)
+	{
+		// TODO(MarcasRealAccount): Make window focused when right clicking when starting to drag
+		if (options->Scale == 0.0)
+			return;
+
+		if (!ImGui::IsWindowFocused())
+			return;
+
+		ImGuiWindow* window = ImGui::GetCurrentWindow();
+		if (window->SkipItems)
+			return;
+
+		ImGuiContext* ctx   = ImGui::GetCurrentContext();
+		ImGuiStyle*   style = &ctx->Style;
+		ImGuiIO*      io    = &ctx->IO;
+
+		bool   down = false;
+		double drag = GetMouseDragDeltaX(ImGuiMouseButton_Right, &down);
+		if (down)
+		{
+			if (options->PreviousDrag == 0.0)
+				options->PreviousDrag = drag;
+			double deltaDrag      = options->PreviousDrag - drag;
+			double dragVel        = deltaDrag * options->InvScale;
+			options->PreviousDrag = drag;
+			options->OffsetVel    = dragVel * invDeltaTime;
+		}
+		else if (options->PreviousDrag != 0.0)
+		{
+			options->OffsetVel    = options->OffsetVel;
+			options->PreviousDrag = 0.0;
+		}
+	}
+
+	void TimelineStateUpdate(TimelineOptions* options, double deltaTime)
+	{
+		options->Offset    += options->OffsetVel * deltaTime;
+		options->OffsetVel = std::lerp(options->OffsetVel, 0.0, 6.5 * deltaTime);
+		if (options->OffsetVel > -1e-4 && options->OffsetVel < 1e-4)
+			options->OffsetVel = 0.0;
+	}
 } // namespace UI

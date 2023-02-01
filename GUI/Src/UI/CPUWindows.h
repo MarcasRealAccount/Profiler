@@ -14,6 +14,8 @@ namespace UI
 		double Offset        = 0.0;         // Timestep offset
 		double Scale         = 1.0;         // Timesteps per pixel
 		double InvScale      = 1.0;         // Pixels per timestep
+		double OffsetVel     = 0.0;         // Rate of change in Offset
+		double PreviousDrag  = 0.0;
 
 		// Style
 		bool          Borders             = false;
@@ -41,4 +43,6 @@ namespace UI
 	void DefaultTimelineStyle(TimelineOptions* options);
 	void DrawTimescale(TimelineOptions* options);
 	void DrawTimeline(TimelineOptions* options, std::size_t numEntries, TimelineEntry* entries);
+	void TimelineDraggingInWindow(TimelineOptions* options, double invDeltaTime);
+	void TimelineStateUpdate(TimelineOptions* options, double deltaTime);
 } // namespace UI
