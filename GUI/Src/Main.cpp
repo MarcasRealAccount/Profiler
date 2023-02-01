@@ -155,7 +155,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			UI::DefaultTimelineStyle(&timelineOptions);
 			UI::DrawTimescale(&timelineOptions);
 			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
-			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, cpu0Timeline.size(), cpu0Timeline.data());
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);

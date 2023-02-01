@@ -255,8 +255,8 @@ namespace UI
 			if (entry.Begin > endOffset)
 				continue;
 
-			double bx = (entry.Begin - options->Offset) * options->InvScale;
-			double ex = (entry.End - options->Offset) * options->InvScale;
+			double bx = Clamp((entry.Begin - options->Offset) * options->InvScale, 0.0, width);
+			double ex = Clamp((entry.End - options->Offset) * options->InvScale, 0.0, width);
 			double dx = ex - bx;
 			if (dx < 5.0)
 				continue;
