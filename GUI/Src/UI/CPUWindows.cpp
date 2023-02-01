@@ -252,8 +252,8 @@ namespace UI
 
 		if (options->Borders)
 		{
-			window->DrawList->AddLine(totalBB.Min, { totalBB.Max.x, totalBB.Min.y }, options->BorderColor, style->FrameBorderSize);
-			window->DrawList->AddLine({ totalBB.Min.x, totalBB.Max.y }, totalBB.Max, options->BorderColor, style->FrameBorderSize);
+			window->DrawList->AddLine(totalBB.Min, { totalBB.Max.x, totalBB.Min.y }, options->BorderColor);
+			window->DrawList->AddLine({ totalBB.Min.x, totalBB.Max.y }, totalBB.Max, options->BorderColor);
 		}
 
 		auto mp = ImGui::GetMousePos();
