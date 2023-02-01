@@ -64,7 +64,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	ImGui_ImplOpenGL3_Init("#version 330 core");
 
 	bool showDemoWindow = true;
-	bool showCPUCores   = true;
+	bool showCoresView  = true;
 	bool showThreadView = true;
 	// UI::CPUCoresData cpuCoresData {};
 	UI::TimelineOptions            timelineOptions {};
@@ -136,8 +136,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			{
 				if (ImGui::MenuItem("Show Demo Window"))
 					showDemoWindow = true;
-				if (ImGui::MenuItem("Show CPU Cores"))
-					showCPUCores = true;
+				if (ImGui::MenuItem("Show Cores View"))
+					showCoresView = true;
 				if (ImGui::MenuItem("Show Thread View"))
 					showThreadView = true;
 				ImGui::EndMenu();
@@ -146,9 +146,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		}
 
 		if (showCPUCores)
+		if (showCoresView)
 		{
-			ImGui::Begin("Timeline", &showCPUCores);
-			ImGui::Begin("CPU Cores##CPUCores", &showCPUCores);
+			ImGui::Begin("Cores View##CoresView", &showCoresView);
+
 
 
 			UI::DefaultTimelineStyle(&timelineOptions);
@@ -176,7 +177,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 		if (showThreadView)
 		{
-			ImGui::Begin("Thread View", &showThreadView);
+			ImGui::Begin("Thread View##ThreadView", &showThreadView);
 
 			UI::DrawTimescale(&timelineOptions);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
