@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <vector>
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -166,7 +168,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 			ImGui::End();
 		}
-		// UI::ShowCPUCores(&showCPUCores, &cpuCoresData, 1.0f / 144.0f);
 
 		if (showDemoWindow)
 			ImGui::ShowDemoWindow(&showDemoWindow);

@@ -126,6 +126,9 @@ namespace UI
 
 	void DrawTimescale(TimelineOptions* options)
 	{
+		if (options->Scale == 0.0)
+			return;
+
 		ImGuiWindow* window = ImGui::GetCurrentWindow();
 		if (window->SkipItems)
 			return;
@@ -202,6 +205,9 @@ namespace UI
 
 	void DrawTimeline(TimelineOptions* options, std::size_t numEntries, TimelineEntry* entries)
 	{
+		if (options->Scale == 0.0)
+			return;
+
 		ImGuiWindow* window = ImGui::GetCurrentWindow();
 		if (window->SkipItems)
 			return;
@@ -245,10 +251,17 @@ namespace UI
 			if (entry.Begin > endOffset)
 				continue;
 
-			std::uint32_t color = entry.Color & 0xFF'FF'FF | 255 << 24;
-
 			double bx = (entry.Begin - options->Offset) * options->InvScale;
 			double ex = (entry.End - options->Offset) * options->InvScale;
+			double dx = ex - bx;
+			if (dx < 5.0)
+				continue;
+
+			std::uint8_t alpha = 255;
+			if (dx < 10.0)
+				alpha = static_cast<std::uint8_t>((dx - 5.0) / 5.0 * 255.0);
+			std::uint32_t color = entry.Color & 0xFF'FF'FF | alpha << 24;
+
 			window->DrawList->AddRectFilled({ static_cast<float>(contentBB.Min.x + bx), contentBB.Min.y },
 											{ static_cast<float>(contentBB.Min.x + ex), contentBB.Max.y },
 											color);
