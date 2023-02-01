@@ -15,8 +15,6 @@ namespace UI
 		double Scale         = 1.0;         // Timesteps per pixel
 		double InvScale      = 1.0;         // Pixels per timestep
 
-		// std::uint64_t Offset     = 0;           // Timestep offset
-
 		// Style
 		bool          Borders             = false;
 		std::uint32_t BorderColor         = 0;

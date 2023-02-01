@@ -65,6 +65,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	bool showDemoWindow = true;
 	bool showCPUCores   = true;
+	bool showThreadView = true;
 	// UI::CPUCoresData cpuCoresData {};
 	UI::TimelineOptions            timelineOptions {};
 	std::vector<UI::TimelineEntry> cpu0Timeline {
@@ -137,6 +138,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 					showDemoWindow = true;
 				if (ImGui::MenuItem("Show CPU Cores"))
 					showCPUCores = true;
+				if (ImGui::MenuItem("Show Thread View"))
+					showThreadView = true;
 				ImGui::EndMenu();
 			}
 			ImGui::EndMainMenuBar();
@@ -145,6 +148,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		if (showCPUCores)
 		{
 			ImGui::Begin("Timeline", &showCPUCores);
+			ImGui::Begin("CPU Cores##CPUCores", &showCPUCores);
+
 
 			UI::DefaultTimelineStyle(&timelineOptions);
 			UI::DrawTimescale(&timelineOptions);
@@ -164,6 +169,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+			UI::DrawTimeline(&timelineOptions, 0, nullptr);
+
+			ImGui::End();
+		}
+
+		if (showThreadView)
+		{
+			ImGui::Begin("Thread View", &showThreadView);
+
+			UI::DrawTimescale(&timelineOptions);
 			UI::DrawTimeline(&timelineOptions, 0, nullptr);
 
 			ImGui::End();

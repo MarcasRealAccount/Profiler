@@ -160,14 +160,16 @@ namespace UI
 		double spp = options->InvSampleRate * options->Scale;
 		double pps = options->SampleRate * options->InvScale;
 
-		double           offsetTime        = options->Offset * options->InvSampleRate;
-		double           deltaTime         = 120.0 * spp;
-		std::int64_t     offsetScalel      = offsetTime == 0.0 ? (1LL << 63LL) : static_cast<std::int64_t>(Ceil(std::log10(offsetTime) - 1));
-		std::int64_t     baseOffsetScalel  = offsetTime == 0.0 ? (1LL << 63LL) : (offsetScalel < 0 ? (offsetScalel - 2) : offsetScalel) / 3 * 3;
-		std::int64_t     deltaScalel       = static_cast<std::int64_t>(Ceil(std::log10(deltaTime)));
-		std::int64_t     baseDeltaScalel   = (deltaScalel < 0 ? (deltaScalel - 2) : deltaScalel) / 3 * 3;
-		double           baseOffsetScale   = std::pow(10.0, baseOffsetScalel);
-		double           deltaScale        = std::pow(10.0, deltaScalel);
+		double       offsetTime       = options->Offset * options->InvSampleRate;
+		double       deltaTime        = 120.0 * spp;
+		std::int64_t offsetScalel     = offsetTime == 0.0 ? (1LL << 63LL) : static_cast<std::int64_t>(Ceil(std::log10(offsetTime) - 1));
+		std::int64_t baseOffsetScalel = offsetTime == 0.0 ? (1LL << 63LL) : (offsetScalel < 0 ? (offsetScalel - 2) : offsetScalel) / 3 * 3;
+		std::int64_t deltaScalel      = static_cast<std::int64_t>(Ceil(std::log10(deltaTime)));
+		std::int64_t baseDeltaScalel  = (deltaScalel < 0 ? (deltaScalel - 2) : deltaScalel) / 3 * 3;
+		double       baseOffsetScale  = std::pow(10.0, baseOffsetScalel);
+		double       deltaScale       = std::pow(10.0, deltaScalel);
+		if (deltaScale == 0.0)
+			return;
 		double           baseDeltaScale    = std::pow(10.0, baseDeltaScalel);
 		double           upperDeltaScale   = deltaScale * 10.0;
 		double           startTime         = Frac(offsetTime / upperDeltaScale) * upperDeltaScale;
@@ -242,6 +244,8 @@ namespace UI
 			window->DrawList->AddLine({ totalBB.Min.x, totalBB.Max.y }, totalBB.Max, options->BorderColor, style->FrameBorderSize);
 		}
 
+		auto mp = ImGui::GetMousePos();
+
 		double endOffset = options->Offset + width * options->Scale;
 		for (std::size_t i = 0; i < numEntries; ++i)
 		{
@@ -262,16 +266,19 @@ namespace UI
 				alpha = static_cast<std::uint8_t>((dx - 5.0) / 5.0 * 255.0);
 			std::uint32_t color = entry.Color & 0xFF'FF'FF | alpha << 24;
 
-			window->DrawList->AddRectFilled({ static_cast<float>(contentBB.Min.x + bx), contentBB.Min.y },
-											{ static_cast<float>(contentBB.Min.x + ex), contentBB.Max.y },
-											color);
+			ImVec2 entryMin { static_cast<float>(contentBB.Min.x + bx), contentBB.Min.y };
+			ImVec2 entryMax { static_cast<float>(contentBB.Min.x + ex), contentBB.Max.y };
+
+			window->DrawList->AddRectFilled(entryMin, entryMax, color);
+			if (mp.x >= entryMin.x && mp.y >= entryMin.y && mp.x <= entryMax.x && mp.y <= entryMax.y)
+				window->DrawList->AddRect(entryMin, entryMax, 0xFF'FF'FF'FF);
+
 			double textWidth = ImGui::CalcTextSize(entry.Text).x;
 			double innerSize = ex - bx - style->ItemInnerSpacing.x * 2;
 			if (textWidth < innerSize)
 			{
 				double   luminance = 0.2126 / 255 * ((entry.Color >> 16) & 0xFF) + 0.7152 / 255 * ((entry.Color >> 8) & 0xFF) + 0.0722 / 255 * (entry.Color & 0xFF);
 				uint32_t textColor = luminance > 0.5 ? options->DarkEntryTextColor : options->LightEntryTextColor;
-
 				window->DrawList->AddText({ static_cast<float>(contentBB.Min.x + bx + (ex - bx - textWidth) * 0.5f),
 											static_cast<float>(contentBB.Min.y + style->ItemInnerSpacing.y) },
 										  textColor,
