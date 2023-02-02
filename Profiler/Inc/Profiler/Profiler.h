@@ -6,5 +6,6 @@
 #include "Frame.h"
 #include "Function.h"
 #include "Memory.h"
+#include "Runtime.h"
 #include "State.h"
 #include "Thread.h"
