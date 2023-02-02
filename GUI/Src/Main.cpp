@@ -7,6 +7,8 @@
 #include <chrono>
 #include <vector>
 
+#include <Profiler/Profiler.h>
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -67,14 +69,27 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330 core");
 
-	bool                           showDemoWindow = true;
-	bool                           showCoresView  = true;
-	bool                           showThreadView = true;
+	bool                           showDemoWindow  = true;
+	bool                           showCoresView   = true;
+	bool                           showThreadView  = true;
+	bool                           showRuntimeView = true;
 	UI::TimelineOptions            timelineOptions {};
 	std::vector<UI::TimelineEntry> cpu0Timeline;
 	cpu0Timeline.reserve(100);
 	for (std::size_t i = 0; i < 100; ++i)
 		cpu0Timeline.emplace_back(UI::TimelineEntry { i, i + 1, nullptr, 32 << 16 | 32 << 8 | 32 });
+
+	bool                    supportsIndividualCoreUsages  = Profiler::GetRuntimeAbilities().hasFlag(Profiler::RuntimeAbilities::ProcessIndividualCoreUsages);
+	bool                    supportsIndividualDriveUsages = Profiler::GetRuntimeAbilities().hasFlag(Profiler::RuntimeAbilities::ProcessIndividualDriveUsages);
+	std::size_t             coreCount                     = supportsIndividualCoreUsages ? Profiler::GetTotalCoreCount() : 1;
+	std::size_t             driveCount                    = supportsIndividualDriveUsages ? Profiler::GetDriveCount() : 1;
+	Profiler::CoreCounter*  coreCounters                  = new Profiler::CoreCounter[coreCount];
+	Profiler::CoreCounter*  processCoreCounters           = new Profiler::CoreCounter[coreCount];
+	Profiler::DriveInfo*    driveInfos                    = new Profiler::DriveInfo[driveCount];
+	Profiler::DriveCounter* driveCounters                 = new Profiler::DriveCounter[driveCount];
+	Profiler::DriveCounter* processDriveCounters          = new Profiler::DriveCounter[driveCount];
+	if (supportsIndividualDriveUsages)
+		Profiler::GetDriveInfos(driveCount, driveInfos);
 
 	using Clock            = std::chrono::high_resolution_clock;
 	auto previousFrameTime = Clock::now();
@@ -116,7 +131,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		if (ImGui::BeginMainMenuBar())
 		{
 			// m_MenuBarHeight = ImGui::GetWindowHeight();
-
 			if (ImGui::BeginMenu("File"))
 			{
 				ImGui::EndMenu();
@@ -133,6 +147,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 					showCoresView = true;
 				if (ImGui::MenuItem("Show Thread View"))
 					showThreadView = true;
+				if (ImGui::MenuItem("Show Runtime View"))
+					showRuntimeView = true;
 				ImGui::EndMenu();
 			}
 			ImGui::EndMainMenuBar();
@@ -182,6 +198,127 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			ImGui::End();
 		}
 
+		if (showRuntimeView)
+		{
+			ImGui::Begin("Runtime View##RuntimeView", &showRuntimeView);
+
+			Profiler::Process curProcess = Profiler::GetCurrentProcess();
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("CPU Usage##CPUUsage"))
+			{
+				ImGui::Text("Process / Total");
+
+				double totalProcessUsage = 0.0;
+				double totalTotalUsage   = 0.0;
+
+				Profiler::GetCoreUsages(0, coreCount, coreCounters);
+				Profiler::GetCoreUsages(curProcess, coreCount, processCoreCounters);
+				if (supportsIndividualCoreUsages)
+				{
+					for (std::size_t i = 0; i < coreCount; ++i)
+					{
+						totalProcessUsage += processCoreCounters[i].Usage;
+						totalTotalUsage   += coreCounters[i].Usage;
+					}
+					totalProcessUsage /= coreCount;
+					totalTotalUsage   /= coreCount;
+				}
+				else
+				{
+					totalProcessUsage = processCoreCounters[0].Usage;
+					totalTotalUsage   = coreCounters[0].Usage;
+				}
+				ImGui::Text("Total: %.1lf%% / %.1lf%%", totalProcessUsage * 100.0, totalTotalUsage * 100.0);
+				if (supportsIndividualCoreUsages)
+					for (std::size_t i = 0; i < coreCount; ++i)
+						ImGui::Text("Core %lld: %.1lf%% / %.1lf%%", processCoreCounters[i].Usage * 100.0, coreCounters[i].Usage * 100.0);
+
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Memory Usage##MemoryUsage"))
+			{
+				ImGui::Text("Process / Total");
+
+				ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+				if (ImGui::TreeNode("Total##Total"))
+				{
+					Profiler::MemoryCounters counters {};
+					Profiler::GetMemoryUsage(0, counters);
+					ImGui::Text("Physical: %lld / %lld (%.1lf%%)", counters.CurrentWorkingSet, counters.PeakWorkingSet, static_cast<double>(counters.CurrentWorkingSet) / static_cast<double>(counters.PeakWorkingSet) * 100.0);
+					ImGui::Text("Virtual: %lld", counters.Private);
+
+					ImGui::TreePop();
+				}
+
+				ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+				if (ImGui::TreeNode("Process##Process"))
+				{
+					Profiler::MemoryCounters counters {};
+					Profiler::GetMemoryUsage(curProcess, counters);
+					ImGui::Text("Physical: %lld", counters.CurrentWorkingSet);
+					ImGui::Text("Virtual: %lld", counters.Private);
+					ImGui::Text("Paged: %lld", counters.CurrentPagedPool);
+					ImGui::Text("Non Paged: %lld", counters.CurrentNonPagedPool);
+
+					ImGui::TreePop();
+				}
+
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Drive Usage##DriveUsage"))
+			{
+				if (supportsIndividualDriveUsages)
+				{
+					std::size_t newDriveCount = Profiler::GetDriveCount();
+					if (newDriveCount != driveCount)
+					{
+						delete[] driveInfos;
+						delete[] driveCounters;
+						delete[] processDriveCounters;
+						driveInfos           = new Profiler::DriveInfo[driveCount];
+						driveCounters        = new Profiler::DriveCounter[driveCount];
+						processDriveCounters = new Profiler::DriveCounter[driveCount];
+						Profiler::GetDriveInfos(driveCount, driveInfos);
+					}
+				}
+
+				Profiler::GetDriveUsages(0, driveCount, driveCounters);
+				Profiler::GetDriveUsages(curProcess, driveCount, processDriveCounters);
+				ImGui::Text("Process / Total");
+				if (supportsIndividualDriveUsages)
+				{
+					for (std::size_t i = 0; i < driveCount; ++i)
+					{
+						auto& driveInfo = driveInfos[i];
+						if (ImGui::TreeNode("Drive %s##Drive%s", driveInfo.Name.c_str(), driveInfo.Name.c_str()))
+						{
+							ImGui::Text("Size: %lld", driveInfo.Size);
+							ImGui::Text("Read: %lld / %lld", processDriveCounters[i].BytesRead, driveCounters[i].BytesRead);
+							ImGui::Text("Written: %lld / %lld", processDriveCounters[i].BytesWritten, driveCounters[i].BytesWritten);
+							ImGui::Text("Usage: %.1lf%% / %.1lf%%", processDriveCounters[i].Usage, driveCounters[i].Usage);
+
+							ImGui::TreePop();
+						}
+					}
+				}
+				else
+				{
+					ImGui::Text("Read: %lld / %lld", processDriveCounters[0].BytesRead, driveCounters[0].BytesRead);
+					ImGui::Text("Written: %lld / %lld", processDriveCounters[0].BytesWritten, driveCounters[0].BytesWritten);
+					ImGui::Text("Usage: %.1lf%% / %.1lf%%", processDriveCounters[0].Usage, driveCounters[0].Usage);
+				}
+
+				ImGui::TreePop();
+			}
+
+			ImGui::End();
+		}
+
 		if (showDemoWindow)
 			ImGui::ShowDemoWindow(&showDemoWindow);
 
@@ -208,6 +345,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 		glfwSwapBuffers(window);
 	}
+
+	delete[] processDriveCounters;
+	delete[] driveCounters;
+	delete[] driveInfos;
+	delete[] processCoreCounters;
+	delete[] coreCounters;
 
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
