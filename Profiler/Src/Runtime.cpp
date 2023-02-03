@@ -30,11 +30,24 @@ namespace Profiler
 	ERuntimeAbilities GetRuntimeAbilities()
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
-		return RuntimeAbilities::ProcessCoreUsage |
-			   RuntimeAbilities::ProcessMemoryUsage |
-			   RuntimeAbilities::ProcessIndividualMemoryUsages;
+		return RuntimeAbilities::CoreUsage |
+			   RuntimeAbilities::MemoryUsage |
+			   RuntimeAbilities::IndividualMemoryUsages |
+			   RuntimeAbilities::PerProcessCoreUsage |
+			   RuntimeAbilities::PerProcessMemoryUsage |
+			   RuntimeAbilities::PerProcessIndividualMemoryUsages |
+			   RuntimeAbilities::PerProcessMemoryPageFaults;
 #else
 		return RuntimeAbilities::None;
+#endif
+	}
+
+	Process SystemProcess()
+	{
+#if BUILD_IS_SYSTEM_WINDOWS
+		return 0;
+#else
+		return 0;
 #endif
 	}
 
@@ -52,25 +65,26 @@ namespace Profiler
 		return s_CoreCount;
 	}
 
-	std::size_t GetDriveCount()
+	std::size_t GetIOEndpointCount(bool* pChanged)
 	{
+		if (pChanged)
+			*pChanged = false;
 		return 0;
 	}
 
-	void GetDriveInfos(std::size_t driveCount, DriveInfo* infos)
+	void GetIOEndpointInfos(std::size_t endpointCount, IOEndpointInfo* infos)
 	{
-		for (std::size_t i = 0; i < driveCount; ++i)
+		for (std::size_t i = 0; i < endpointCount; ++i)
 		{
-			DriveInfo& info = infos[i];
-			info.Name       = "";
-			info.Size       = 0;
+			auto& info = infos[i];
+			info.Name  = "";
 		}
 	}
 
-	void GetCoreUsages(Process process, std::size_t coreCount, CoreCounter* coreCounters)
+	void GetCoreUsages(Process process, std::size_t coreCount, CoreCounter* counters)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
-		if (coreCount == 0 || !coreCounters)
+		if (coreCount == 0 || !counters)
 			return;
 
 		auto itr = s_ProcessDatas.find(process);
@@ -140,13 +154,13 @@ namespace Profiler
 				data.LastUserTime = curUserTime;
 				data.LastUsage    = usage;
 			}
-			coreCounters[0].Usage = data.LastUsage;
+			counters[0].Usage = data.LastUsage;
 		}
 #else
 		for (std::size_t i = 0; i < coreCount; ++i)
 		{
-			CoreCounter& cnt = coreCounters[i];
-			cnt.Usage        = 0.0;
+			auto& cnt = counters[i];
+			cnt.Usage = 0.0;
 		}
 #endif
 	}
@@ -235,14 +249,14 @@ namespace Profiler
 #endif
 	}
 
-	void GetDriveUsages(Process process, std::size_t driveCount, DriveCounter* driveCounters)
+	void GetIOUsages(Process process, std::size_t endpointCount, IOCounter* counters)
 	{
-		for (std::size_t i = 0; i < driveCount; ++i)
+		for (std::size_t i = 0; i < endpointCount; ++i)
 		{
-			DriveCounter& cnt = driveCounters[i];
-			cnt.BytesRead     = 0;
-			cnt.BytesWritten  = 0;
-			cnt.Usage         = 0.0;
+			auto& counter        = counters[i];
+			counter.BytesRead    = 0;
+			counter.BytesWritten = 0;
+			counter.Usage        = 0.0;
 		}
 	}
 } // namespace Profiler
