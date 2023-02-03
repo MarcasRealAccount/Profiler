@@ -13,10 +13,10 @@ namespace UI
 		auto ioEndpointCount = Profiler::GetIOEndpointCount(&changed);
 
 		state->Abilities = Profiler::GetRuntimeAbilities();
-		state->TotalCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualCoreUsages) ? coreCount : 1);
-		state->ProcessCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualCoreUsages) ? coreCount : 1);
-		state->TotalIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages) ? ioEndpointCount : 1);
-		state->ProcessIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualIOUsages) ? ioEndpointCount : 1);
+		state->TotalCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualCoreUsages) ? coreCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::CoreUsage) ? 1 : 0));
+		state->ProcessCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualCoreUsages) ? coreCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessCoreUsage) ? 1 : 0));
+		state->TotalIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages) ? ioEndpointCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::IOUsage) ? 1 : 0));
+		state->ProcessIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualIOUsages) ? ioEndpointCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIOUsage) ? 1 : 0));
 
 		if (changed)
 		{
@@ -171,13 +171,13 @@ namespace UI
 					double      physicalUsage       = GetScaledBytes(state->TotalMemoryUsages.CurrentWorkingSet, physicalUsageSuffix);
 					double      physicalTotal       = GetScaledBytes(state->TotalMemoryUsages.PeakWorkingSet, physicalTotalSuffix);
 					double      virtualUsage        = GetScaledBytes(state->TotalMemoryUsages.Private, virtualUsageSuffix);
-					ImGui::Text("Physical: %6.2lf %-2s / %6.2lf %-2s (%6.2lf%%)",
+					ImGui::Text("Physical:    %6.2lf %-2s / %6.2lf %-2s (%6.2lf%%)",
 								physicalUsage,
 								physicalUsageSuffix.c_str(),
 								physicalTotal,
 								physicalTotalSuffix.c_str(),
 								static_cast<double>(state->TotalMemoryUsages.CurrentWorkingSet) / static_cast<double>(state->TotalMemoryUsages.PeakWorkingSet) * 100.0);
-					ImGui::Text("Virtual: %6.2lf %-2s", virtualUsage, virtualUsageSuffix.c_str());
+					ImGui::Text("Virtual:     %6.2lf %-2s", virtualUsage, virtualUsageSuffix.c_str());
 				}
 				else
 				{
@@ -185,7 +185,7 @@ namespace UI
 					std::string totalSuffix = "";
 					double      usage       = GetScaledBytes(state->TotalMemoryUsages.Private, usageSuffix);
 					double      total       = GetScaledBytes(state->TotalMemoryUsages.PeakPrivate, totalSuffix);
-					ImGui::Text("Usage: %6.2lf %-2s / %6.2lf %-2s (%6.2lf%%)",
+					ImGui::Text("Usage:       %6.2lf %-2s / %6.2lf %-2s (%6.2lf%%)",
 								usage,
 								usageSuffix.c_str(),
 								total,
@@ -215,16 +215,16 @@ namespace UI
 					double      virtualUsage        = GetScaledBytes(state->ProcessMemoryUsages.Private, virtualUsageSuffix);
 					double      pagedUsage          = GetScaledBytes(state->ProcessMemoryUsages.CurrentPagedPool, pagedUsageSuffix);
 					double      nonPagedUsage       = GetScaledBytes(state->ProcessMemoryUsages.CurrentNonPagedPool, nonPagedUsageSuffix);
-					ImGui::Text("Physical: %6.2lf %-2s", physicalUsage, physicalUsageSuffix.c_str());
-					ImGui::Text("Virtual: %6.2lf %-2s", virtualUsage, virtualUsageSuffix.c_str());
-					ImGui::Text("Paged: %6.2lf %-2s", pagedUsage, pagedUsageSuffix.c_str());
-					ImGui::Text("Non Paged: %6.2lf %-2s", nonPagedUsage, nonPagedUsageSuffix.c_str());
+					ImGui::Text("Physical:    %6.2lf %-2s", physicalUsage, physicalUsageSuffix.c_str());
+					ImGui::Text("Virtual:     %6.2lf %-2s", virtualUsage, virtualUsageSuffix.c_str());
+					ImGui::Text("Paged:       %6.2lf %-2s", pagedUsage, pagedUsageSuffix.c_str());
+					ImGui::Text("Non Paged:   %6.2lf %-2s", nonPagedUsage, nonPagedUsageSuffix.c_str());
 				}
 				else
 				{
 					std::string usageSuffix = "";
 					double      usage       = GetScaledBytes(state->ProcessMemoryUsages.Private, usageSuffix);
-					ImGui::Text("Usage: %6.2lf %-2s", usage, usageSuffix.c_str());
+					ImGui::Text("Usage:       %6.2lf %-2s", usage, usageSuffix.c_str());
 				}
 
 				if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessMemoryPageFaults))
@@ -304,11 +304,16 @@ namespace UI
 			}
 		}
 
+		totalReadSuffix           += "/s";
+		totalWrittenSuffix        += "/s";
+		processTotalReadSuffix    += "/s";
+		processTotalWrittenSuffix += "/s";
+
 		switch (selector)
 		{
 		case 0b00: return; // Dafuq are you doing in here???
 		case 0b01:
-			ImGui::Text("Total (I/O %%): ---.-- --/s, ---.-- --/s ---.--%% / %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%%",
+			ImGui::Text("Total (I/O %%): (---.-- B/s , ---.-- B/s ) ---.--%% / (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%%",
 						totalRead,
 						totalReadSuffix.c_str(),
 						totalWritten,
@@ -316,7 +321,7 @@ namespace UI
 						totalUsage * 100.0);
 			break;
 		case 0b10:
-			ImGui::Text("Total (I/O %%): %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%% / ---.-- --/s, ---.-- --/s ---.--%%",
+			ImGui::Text("Total (I/O %%): (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%% / (---.-- B/s , ---.-- B/s ) ---.--%%",
 						processTotalRead,
 						processTotalReadSuffix.c_str(),
 						processTotalWritten,
@@ -324,7 +329,7 @@ namespace UI
 						processTotalUsage * 100.0);
 			break;
 		case 0b11:
-			ImGui::Text("Total (I/O %%): %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%% / %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%%",
+			ImGui::Text("Total (I/O %%): (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%% / (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%%",
 						processTotalRead,
 						processTotalReadSuffix.c_str(),
 						processTotalWritten,
@@ -342,6 +347,8 @@ namespace UI
 		if (numIOEndpoints <= 1)
 			return;
 
+		std::uint8_t selector2 = static_cast<std::uint8_t>(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualIOUsages)) << 1 | static_cast<std::uint8_t>(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages));
+
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Individual Endpoints##IndividualEndpoints"))
 		{
@@ -349,7 +356,7 @@ namespace UI
 			{
 				auto& info = state->IOEndpointInfos[i];
 
-				std::uint8_t selector2 = ((i < state->ProcessIOUsages.size()) << 1 | (i < state->TotalIOUsages.size())) & selector;
+				std::uint8_t selector3 = ((i < state->ProcessIOUsages.size()) << 1 | (i < state->TotalIOUsages.size())) & selector2;
 
 				std::string readSuffix;
 				std::string writtenSuffix;
@@ -362,7 +369,7 @@ namespace UI
 				double      processWritten = 0.0;
 				double      processUsage   = 0.0;
 
-				if (selector2 & 0b01)
+				if (selector3 & 0b01)
 				{
 					auto& usg = state->TotalIOUsages[i];
 					read      = GetScaledBytes(usg.BytesRead, readSuffix);
@@ -370,7 +377,7 @@ namespace UI
 					usage     = usg.Usage;
 				}
 
-				if (selector2 & 0b10)
+				if (selector3 & 0b10)
 				{
 					auto& usg      = state->ProcessIOUsages[i];
 					processRead    = GetScaledBytes(usg.BytesRead, processReadSuffix);
@@ -378,11 +385,17 @@ namespace UI
 					processUsage   = usg.Usage;
 				}
 
-				switch (selector2)
+				readSuffix           += "/s";
+				writtenSuffix        += "/s";
+				processReadSuffix    += "/s";
+				processWrittenSuffix += "/s";
+
+				switch (selector3)
 				{
 				case 0b00: break; // Dafuq happened here???
 				case 0b01:
-					ImGui::Text("%s: (I/O %%): ---.-- --/s, ---.-- --/s ---.--%% / %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%%",
+					ImGui::Text("%s (I/O %%): (---.-- B/s , ---.-- B/s ) ---.--%% / (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%%",
+								info.Name.c_str(),
 								read,
 								readSuffix.c_str(),
 								written,
@@ -390,7 +403,8 @@ namespace UI
 								usage * 100.0);
 					break;
 				case 0b10:
-					ImGui::Text("%s: (I/O %%): %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%% / ---.-- --/s, ---.-- --/s ---.--%%",
+					ImGui::Text("%s (I/O %%): (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%% / (---.-- B/s , ---.-- B/s ) ---.--%%",
+								info.Name.c_str(),
 								processRead,
 								processReadSuffix.c_str(),
 								processWritten,
@@ -398,7 +412,8 @@ namespace UI
 								processUsage * 100.0);
 					break;
 				case 0b11:
-					ImGui::Text("%s: (I/O %%): %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%% / %6.2lf %-2s/s, %6.2lf %-2s/s %6.2lf%%",
+					ImGui::Text("%s (I/O %%): (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%% / (%6.2lf %-4s, %6.2lf %-4s) %6.2lf%%",
+								info.Name.c_str(),
 								processRead,
 								processReadSuffix.c_str(),
 								processWritten,
