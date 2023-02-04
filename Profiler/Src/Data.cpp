@@ -1,5 +1,7 @@
 #include "Profiler/Data.h"
 
+#include <cstring>
+
 namespace Profiler::Detail
 {
 	std::uint64_t Data(ThreadState* state, void* data, std::size_t size)

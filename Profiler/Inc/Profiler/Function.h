@@ -4,6 +4,8 @@
 #include "Timestamp.h"
 #include "Utils/Core.h"
 
+#include <cstring>
+
 #include <bit>
 #include <concepts>
 
@@ -81,7 +83,7 @@ namespace Profiler
 		}
 	}
 
-	template <class T>
+	/*template <class T>
 	inline void FlagsArg(std::uint8_t offset, Utils::Flags<T> flags)
 	{
 		ThreadState* state = GetThreadState();
@@ -91,7 +93,7 @@ namespace Profiler
 			std::memcpy(arr, &flags, sizeof(flags));
 			Detail::FlagsArg(state, offset, std::bit_cast<std::uint64_t>(typeid(flags)), arr);
 		}
-	}
+	}*/
 
 	inline void PtrArg(std::uint8_t offset, void* ptr)
 	{

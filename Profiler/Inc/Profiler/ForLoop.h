@@ -4,6 +4,8 @@
 #include "Timestamp.h"
 #include "Utils/Core.h"
 
+#include <cstring>
+
 namespace Profiler
 {
 	namespace Detail

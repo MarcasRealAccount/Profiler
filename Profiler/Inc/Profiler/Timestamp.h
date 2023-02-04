@@ -1,10 +1,12 @@
 #pragma once
 
 #include "State.h"
+#include "Utils/Core.h"
+#include "Utils/IntrinsicsThatClangDoesntSupport.h"
+
+#include <cstdint>
 
 #include <chrono>
-
-#include <intrin.h>
 
 namespace Profiler
 {
@@ -16,7 +18,7 @@ namespace Profiler
 
 	inline void CaptureHighResTimestamp(EventTimestamp& timestamp)
 	{
-		timestamp.Time = __rdtsc();
+		timestamp.Time = Utils::rdtsc();
 		timestamp.Type = 1;
 	}
 } // namespace Profiler

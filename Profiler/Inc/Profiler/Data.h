@@ -15,5 +15,6 @@ namespace Profiler
 		ThreadState* state = GetThreadState();
 		if (state->Capture)
 			return Detail::Data(state, data, size);
+		return 0ULL;
 	}
 } // namespace Profiler

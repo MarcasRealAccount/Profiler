@@ -1,5 +1,6 @@
 #include "Profiler/Utils/UTF.h"
 
+#include <cstring>
 #include <cwchar>
 
 namespace Profiler::Utils::UTF

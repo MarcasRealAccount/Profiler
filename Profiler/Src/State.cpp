@@ -1,11 +1,10 @@
 #include "Profiler/State.h"
 #include "Profiler/Utils/Core.h"
+#include "Profiler/Utils/IntrinsicsThatClangDoesntSupport.h"
 
 #include <iostream>
 
 #include <fmt/format.h>
-
-#include <intrin.h>
 
 #if BUILD_IS_SYSTEM_WINDOWS
 	#include <Windows.h>
@@ -23,7 +22,6 @@ typedef struct _PROCESSOR_POWER_INFORMATION
 	ULONG MaxIdleState;
 	ULONG CurrentIdleState;
 } PROCESSOR_POWER_INFORMATION, *PPROCESSOR_POWER_INFORMATION;
-
 #endif
 
 namespace Profiler
@@ -34,15 +32,15 @@ namespace Profiler
 	static void CheckInvariantClock()
 	{
 		int res[4];
-		__cpuid(res, 0x8000'0001);
+		Utils::cpuid(res, 0x8000'0001);
 		if (!((res[2] >> 23) & 1))
 			return;
 
-		__cpuid(res, 1);
+		Utils::cpuid(res, 1);
 		if (!((res[3] >> 4) & 1))
 			return;
 
-		__cpuid(res, 0x8000'0007);
+		Utils::cpuid(res, 0x8000'0007);
 		if (!((res[3] >> 8) & 1))
 			return;
 
@@ -69,7 +67,7 @@ namespace Profiler
 	static void CheckIBS()
 	{
 		int res[4];
-		__cpuid(res, 0x8000'0001);
+		Utils::cpuid(res, 0x8000'0001);
 		if (!((res[2] >> 10) & 1))
 			return;
 

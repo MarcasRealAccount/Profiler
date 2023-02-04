@@ -77,8 +77,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	UI::RuntimeViewState           runtimeViewState {};
 	UI::TimelineOptions            timelineOptions {};
 	std::vector<UI::TimelineEntry> cpu0Timeline;
-	cpu0Timeline.reserve(1'000'000);
-	for (std::size_t i = 0; i < 1'000'000; ++i)
+	cpu0Timeline.reserve(1'000);
+	for (std::size_t i = 0; i < 1'000; ++i)
 		cpu0Timeline.emplace_back(UI::TimelineEntry { i, i + 1, nullptr, 32 << 16 | 32 << 8 | 32 });
 
 	runtimeViewState.Process = Profiler::GetCurrentProcess();
