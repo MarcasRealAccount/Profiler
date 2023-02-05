@@ -101,7 +101,7 @@ namespace UI
 		options->BorderColor         = ImGui::GetColorU32(ImGuiCol_Border);
 		options->DefaultEntryColor   = ImGui::GetColorU32(ImGuiCol_PlotLines);
 		options->LightEntryTextColor = ImGui::GetColorU32(ImGuiCol_Text);
-		options->DarkEntryTextColor  = 255 << 24 | (255 - (options->LightEntryTextColor >> 16) & 0xFF) << 16 | (255 - (options->LightEntryTextColor >> 8) & 0xFF) << 8 | 255 - options->LightEntryTextColor & 0xFF;
+		options->DarkEntryTextColor  = 255 << 24 | (255 - (options->LightEntryTextColor >> 16) & 0xFF) << 16 | (255 - (options->LightEntryTextColor >> 8) & 0xFF) << 8 | (255 - options->LightEntryTextColor & 0xFF);
 		options->LargeBarColor       = ImGui::GetColorU32(ImGuiCol_Text);
 		options->SmallBarColor       = ImGui::GetColorU32(ImGuiCol_Text);
 		options->TimeColor           = ImGui::GetColorU32(ImGuiCol_Text);
@@ -124,7 +124,7 @@ namespace UI
 		window->DrawList->AddText(textPos, options->TimeColor, str.c_str(), str.c_str() + str.size());
 	}
 
-	void DrawSmallBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, ImRect& timeBB, float x)
+	void DrawSmallBar(TimelineOptions* options, ImGuiWindow* window, ImRect& barsBB, float x)
 	{
 		ImVec2 p  = { barsBB.Min.x + x, barsBB.Min.y };
 		ImVec2 p2 = { p.x, p.y + options->SmallBarHeight };
@@ -176,17 +176,15 @@ namespace UI
 		double       deltaScale       = std::pow(10.0, deltaScalel);
 		if (deltaScale == 0.0)
 			return;
-		double           baseDeltaScale    = std::pow(10.0, baseDeltaScalel);
-		double           upperDeltaScale   = deltaScale * 10.0;
-		double           startTime         = Frac(offsetTime / upperDeltaScale) * upperDeltaScale;
-		double           baseTime          = offsetTime - startTime;
-		double           startTimeBoundary = CeilToBoundary(startTime, deltaScale);
-		double           startX            = (startTimeBoundary - startTime) * pps;
-		double           deltaX            = deltaScale * pps;
-		double           smallDeltaX       = deltaX / (options->SmallBars + 1);
-		std::uint64_t    largeBars         = static_cast<std::uint64_t>(Ceil(width / deltaX));
-		std::string_view baseSuffix        = GetTimeSuffix(baseOffsetScalel);
-		std::string_view suffix            = GetTimeSuffix(baseDeltaScalel);
+		double        baseDeltaScale    = std::pow(10.0, baseDeltaScalel);
+		double        upperDeltaScale   = deltaScale * 10.0;
+		double        startTime         = Frac(offsetTime / upperDeltaScale) * upperDeltaScale;
+		double        baseTime          = offsetTime - startTime;
+		double        startTimeBoundary = CeilToBoundary(startTime, deltaScale);
+		double        startX            = (startTimeBoundary - startTime) * pps;
+		double        deltaX            = deltaScale * pps;
+		double        smallDeltaX       = deltaX / (options->SmallBars + 1);
+		std::uint64_t largeBars         = static_cast<std::uint64_t>(Ceil(width / deltaX));
 		for (std::uint64_t i = 0; i < largeBars; ++i)
 		{
 			double x = startX + deltaX * i;
@@ -210,9 +208,9 @@ namespace UI
 			}
 			if (i == 0)
 				for (std::int64_t j = -1; j >= -options->SmallBars; --j)
-					DrawSmallBar(options, window, barsBB, timeBB, x + smallDeltaX * j);
+					DrawSmallBar(options, window, barsBB, x + smallDeltaX * j);
 			for (std::int64_t j = 1; j <= options->SmallBars; ++j)
-				DrawSmallBar(options, window, barsBB, timeBB, x + smallDeltaX * j);
+				DrawSmallBar(options, window, barsBB, x + smallDeltaX * j);
 			DrawLargeBar(options, window, barsBB, timeBB, x, offsetTime == 0.0 ? 0.0 : bts, offsetTime == 0.0 ? 1LL << 63LL : btsScale, ts, tsScale);
 		}
 	}
@@ -276,7 +274,7 @@ namespace UI
 			std::uint8_t alpha = 255;
 			// if (dx < 10.0)
 			//	alpha = static_cast<std::uint8_t>((dx - 5.0) / 5.0 * 255.0);
-			std::uint32_t color = entry.Color & 0xFF'FF'FF | alpha << 24;
+			std::uint32_t color = (entry.Color & 0xFF'FF'FF) | alpha << 24;
 
 			ImVec2 entryMin { static_cast<float>(contentBB.Min.x + bx), contentBB.Min.y };
 			ImVec2 entryMax { static_cast<float>(contentBB.Min.x + ex), contentBB.Max.y };
@@ -318,7 +316,7 @@ namespace UI
 		return 0.0f;
 	}
 
-	void TimelineZoomingInWindow(TimelineOptions* options, double invDeltaTime)
+	void TimelineZoomingInWindow(TimelineOptions* options, [[maybe_unused]] double invDeltaTime)
 	{
 		if (options->Scale == 0.0)
 			return;
@@ -360,9 +358,9 @@ namespace UI
 		if (window->SkipItems)
 			return;
 
-		ImGuiContext* ctx   = ImGui::GetCurrentContext();
-		ImGuiStyle*   style = &ctx->Style;
-		ImGuiIO*      io    = &ctx->IO;
+		// ImGuiContext* ctx   = ImGui::GetCurrentContext();
+		// ImGuiStyle*   style = &ctx->Style;
+		// ImGuiIO*      io    = &ctx->IO;
 
 		bool   down = false;
 		double drag = GetMouseDragDeltaX(ImGuiMouseButton_Right, &down);

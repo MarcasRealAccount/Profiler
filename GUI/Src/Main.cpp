@@ -56,8 +56,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	io.ConfigFlags                       |= ImGuiConfigFlags_ViewportsEnable;
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-	ImFont* defaultFont = io.Fonts->AddFontDefault();
-
+	io.Fonts->AddFontDefault();
 	ImGui::StyleColorsDark();
 
 	ImGuiStyle& style = ImGui::GetStyle();
