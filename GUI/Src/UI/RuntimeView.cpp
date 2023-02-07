@@ -9,28 +9,12 @@ namespace UI
 {
 	void UpdateRuntimeView(RuntimeViewState* state)
 	{
-		bool changed         = false;
-		auto coreCount       = Profiler::GetTotalCoreCount();
-		auto ioEndpointCount = Profiler::GetIOEndpointCount(&changed);
-
-		state->Abilities = Profiler::GetRuntimeAbilities();
-		state->TotalCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualCoreUsages) ? coreCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::CoreUsage) ? 1 : 0));
-		state->ProcessCoreUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualCoreUsages) ? coreCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessCoreUsage) ? 1 : 0));
-		state->TotalIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages) ? ioEndpointCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::IOUsage) ? 1 : 0));
-		state->ProcessIOUsages.resize(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualIOUsages) ? ioEndpointCount : (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIOUsage) ? 1 : 0));
-
-		if (changed)
-		{
-			state->IOEndpointInfos.resize(ioEndpointCount);
-			Profiler::GetIOEndpointInfos(ioEndpointCount, state->IOEndpointInfos.data());
-		}
-
-		Profiler::GetCoreUsages(Profiler::SystemProcess(), state->TotalCoreUsages.size(), state->TotalCoreUsages.data());
-		Profiler::GetCoreUsages(state->Process, state->ProcessCoreUsages.size(), state->ProcessCoreUsages.data());
-		Profiler::GetMemoryUsage(Profiler::SystemProcess(), state->TotalMemoryUsages);
-		Profiler::GetMemoryUsage(state->Process, state->ProcessMemoryUsages);
-		Profiler::GetIOUsages(Profiler::SystemProcess(), state->TotalIOUsages.size(), state->TotalIOUsages.data());
-		Profiler::GetIOUsages(state->Process, state->ProcessIOUsages.size(), state->ProcessIOUsages.data());
+		auto systemProcess = Profiler::GetSystemProcess();
+		Profiler::PollData(systemProcess, &state->SystemRuntimeData);
+		if (state->Process == systemProcess)
+			state->ProcessRuntimeData.Abilities = Profiler::RuntimeAbilities::None;
+		else
+			Profiler::PollData(state->Process, &state->ProcessRuntimeData);
 	}
 
 	template <std::integral T>
@@ -89,46 +73,50 @@ namespace UI
 		}
 	}
 
-	void CoreUsages(RuntimeViewState* state)
+	void CPUUsages(RuntimeViewState* state)
 	{
-		ImGui::TextUnformatted("Process / Total");
+		ImGui::TextUnformatted("Process / System");
 
-		double totalUsage        = 0.0;
-		double processTotalUsage = 0.0;
+		auto&        systemData  = state->SystemRuntimeData;
+		auto&        processData = state->ProcessRuntimeData;
+		std::uint8_t selector    = (!!processData.Abilities.hasFlag(Profiler::RuntimeAbilities::CPUUsage)) << 1 | !!systemData.Abilities.hasFlag(Profiler::RuntimeAbilities::CPUUsage);
+		std::uint8_t selector2   = ((!!processData.Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualCPUUsages)) << 1 | !!systemData.Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualCPUUsages)) & selector;
 
-		std::uint8_t selector = (!state->ProcessCoreUsages.empty()) << 1 | !state->TotalCoreUsages.empty();
+		double systemUsage  = 0.0;
+		double processUsage = 0.0;
 
+		// TODO(MarcasRealAccount): Maybe add cpu time information?
 		if (selector & 0b01)
 		{
-			if (state->TotalCoreUsages.size() > 1)
+			if (selector2 & 0b01)
 			{
-				for (std::size_t i = 0; i < state->TotalCoreUsages.size(); ++i)
+				for (std::size_t i = 0; i < systemData.CPUs.size(); ++i)
 				{
-					auto& usage = state->TotalCoreUsages[i];
-					totalUsage  += usage.Usage;
+					auto& cpu   = systemData.CPUs[i];
+					systemUsage += cpu.Usage;
 				}
-				totalUsage /= state->TotalCoreUsages.size();
+				systemUsage /= systemData.CPUs.size();
 			}
 			else
 			{
-				totalUsage = state->TotalCoreUsages[0].Usage;
+				systemUsage = systemData.CPUs[0].Usage;
 			}
 		}
 
 		if (selector & 0b10)
 		{
-			if (state->ProcessCoreUsages.size() > 1)
+			if (selector2 & 0b10)
 			{
-				for (std::size_t i = 0; i < state->ProcessCoreUsages.size(); ++i)
+				for (std::size_t i = 0; i < processData.CPUs.size(); ++i)
 				{
-					auto& usage       = state->ProcessCoreUsages[i];
-					processTotalUsage += usage.Usage;
+					auto& cpu    = processData.CPUs[i];
+					processUsage += cpu.Usage;
 				}
-				processTotalUsage /= state->ProcessCoreUsages.size();
+				processUsage /= processData.CPUs.size();
 			}
 			else
 			{
-				processTotalUsage = state->ProcessCoreUsages[0].Usage;
+				processUsage = processData.CPUs[0].Usage;
 			}
 		}
 
@@ -136,38 +124,37 @@ namespace UI
 		{
 		case 0b00: return; // Dafuq are you doing in here???
 		case 0b01:
-			ImGui::TextF("Total (%): ---.-- / {:6.2}", totalUsage * 100.0);
+			ImGui::TextF("Total (%): ---.-- / {:6.2f}", systemUsage * 100.0);
 			break;
 		case 0b10:
-			ImGui::TextF("Total (%): {:6.2} / ---.--", processTotalUsage * 100.0);
+			ImGui::TextF("Total (%): {:6.2f} / ---.--", processUsage * 100.0);
 			break;
 		case 0b11:
-			ImGui::TextF("Total (%): {:6.2} / {:6.2}", processTotalUsage * 100.0, totalUsage * 100.0);
+			ImGui::TextF("Total (%): {:6.2f} / {:6.2f}", processUsage * 100.0, systemUsage * 100.0);
 			break;
 		}
 
-		std::size_t numCores = std::max(state->TotalCoreUsages.size(), state->ProcessCoreUsages.size());
-		if (numCores <= 1)
+		if (selector2 == 0)
 			return; // No individual core information
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Individual Cores##IndividualCores"))
 		{
+			std::size_t numCores     = std::max(systemData.CPUs.size(), processData.CPUs.size());
 			std::size_t maxCoreWidth = RequiredDigits(numCores);
 			for (std::size_t i = 0; i < numCores; ++i)
 			{
-				std::uint8_t selector2 = ((i < state->ProcessCoreUsages.size()) << 1 | (i < state->TotalCoreUsages.size())) & selector;
 				switch (selector2)
 				{
 				case 0b00: break; // Dafuq happened here???
 				case 0b01:
-					ImGui::TextF("{:{}} (%): ---.-- / {:6.2}", i, maxCoreWidth, state->TotalCoreUsages[i].Usage);
+					ImGui::TextF("{:>{}} (%): ---.-- / {:6.2f}", i, maxCoreWidth, systemData.CPUs[i].Usage * 100.0);
 					break;
 				case 0b10:
-					ImGui::TextF("{:{}} (%): {:6.2} / ---.--", i, maxCoreWidth, state->ProcessCoreUsages[i].Usage);
+					ImGui::TextF("{:>{}} (%): {:6.2f} / ---.--", i, maxCoreWidth, processData.CPUs[i].Usage * 100.0);
 					break;
 				case 0b11:
-					ImGui::TextF("{:{}} (%): {:6.2} / {:6.2}", i, maxCoreWidth, state->ProcessCoreUsages[i].Usage, state->TotalCoreUsages[i].Usage);
+					ImGui::TextF("{:>{}} (%): {:6.2f} / {:6.2f}", i, maxCoreWidth, processData.CPUs[i].Usage * 100.0, systemData.CPUs[i].Usage * 100.0);
 					break;
 				}
 			}
@@ -177,272 +164,320 @@ namespace UI
 
 	void MemoryUsages(RuntimeViewState* state)
 	{
-		if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::MemoryUsage))
-		{
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Total##Total"))
+		auto handleData = [](Profiler::RuntimeData& data, const char* nodeName) {
+			if (data.Abilities.hasFlag(Profiler::RuntimeAbilities::MemoryUsage))
 			{
-				if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualMemoryUsages))
+				ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+				if (ImGui::TreeNode(nodeName))
 				{
-					std::string physicalUsageSuffix = "";
-					std::string physicalTotalSuffix = "";
-					std::string virtualUsageSuffix  = "";
-					double      physicalUsage       = GetScaledBytes(state->TotalMemoryUsages.CurrentWorkingSet, physicalUsageSuffix);
-					double      physicalTotal       = GetScaledBytes(state->TotalMemoryUsages.PeakWorkingSet, physicalTotalSuffix);
-					double      virtualUsage        = GetScaledBytes(state->TotalMemoryUsages.Private, virtualUsageSuffix);
-					ImGui::TextF("Physical:    {:6.2} {:2} / {:6.2} {:2} ({:6.2}%)",
-								 physicalUsage,
-								 physicalUsageSuffix.c_str(),
-								 physicalTotal,
-								 physicalTotalSuffix.c_str(),
-								 static_cast<double>(state->TotalMemoryUsages.CurrentWorkingSet) / static_cast<double>(state->TotalMemoryUsages.PeakWorkingSet) * 100.0);
-					ImGui::TextF("Virtual:     {:6.2} {:2}", virtualUsage, virtualUsageSuffix.c_str());
-				}
-				else
-				{
-					std::string usageSuffix = "";
-					std::string totalSuffix = "";
-					double      usage       = GetScaledBytes(state->TotalMemoryUsages.Private, usageSuffix);
-					double      total       = GetScaledBytes(state->TotalMemoryUsages.PeakPrivate, totalSuffix);
-					ImGui::TextF("Usage:       {:6.2} {:2} / {:6.2} {:2} ({:6.2}%)",
-								 usage,
-								 usageSuffix.c_str(),
-								 total,
-								 totalSuffix.c_str(),
-								 static_cast<double>(state->TotalMemoryUsages.CurrentWorkingSet) / static_cast<double>(state->TotalMemoryUsages.PeakWorkingSet) * 100.0);
-				}
+					auto& mem = data.Memory;
+					if (data.Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualMemoryUsages))
+					{
+						std::string physicalUsageSuffix = "";
+						std::string physicalTotalSuffix = "";
+						std::string virtualUsageSuffix  = "";
+						std::string virtualTotalSuffix  = "";
+						std::string pagedUsageSuffix    = "";
+						std::string nonPagedUsageSuffix = "";
+						double      physicalUsage       = GetScaledBytes(mem.PhysicalUsage, physicalUsageSuffix);
+						double      physicalTotal       = GetScaledBytes(mem.PhysicalTotal, physicalTotalSuffix);
+						double      virtualUsage        = GetScaledBytes(mem.VirtualUsage, virtualUsageSuffix);
+						double      virtualTotal        = GetScaledBytes(mem.VirtualTotal, virtualTotalSuffix);
+						double      pagedUsage          = GetScaledBytes(mem.PagedUsage, pagedUsageSuffix);
+						double      nonPagedUsage       = GetScaledBytes(mem.NonPagedUsage, nonPagedUsageSuffix);
+						ImGui::TextF("Physical:    {:6.2f} {:2} / {:6.2f} {:2} ({:6.2f}%)",
+									 physicalUsage,
+									 physicalUsageSuffix,
+									 physicalTotal,
+									 physicalTotalSuffix,
+									 static_cast<double>(mem.PhysicalUsage) / static_cast<double>(mem.PhysicalTotal) * 100.0);
+						ImGui::TextF("Virtual:     {:6.2f} {:2} / {:6.2f} {:2} ({:6.2f}%)",
+									 virtualUsage,
+									 virtualUsageSuffix,
+									 virtualTotal,
+									 virtualTotalSuffix,
+									 static_cast<double>(mem.VirtualUsage) / static_cast<double>(mem.VirtualTotal) * 100.0);
+						ImGui::TextF("Paged:       {:6.2f} {:2}", pagedUsage, pagedUsageSuffix);
+						ImGui::TextF("Non Paged:   {:6.2f} {:2}", nonPagedUsage, nonPagedUsageSuffix);
+					}
+					else
+					{
+						std::string usageSuffix = "";
+						std::string totalSuffix = "";
+						double      usage       = GetScaledBytes(mem.VirtualUsage, usageSuffix);
+						double      total       = GetScaledBytes(mem.VirtualTotal, totalSuffix);
+						ImGui::TextF("Usage:       {:6.2f} {:2} / {:6.2f} {:2} ({:6.2f}%)",
+									 usage,
+									 usageSuffix,
+									 total,
+									 totalSuffix,
+									 static_cast<double>(mem.VirtualUsage) / static_cast<double>(mem.VirtualTotal) * 100.0);
+					}
 
-				if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::MemoryPageFaults))
-					ImGui::TextF("Page Faults: {}", state->TotalMemoryUsages.PageFaultCount);
+					if (data.Abilities.hasFlag(Profiler::RuntimeAbilities::MemoryPageFaults))
+						ImGui::TextF("Page Faults: {}", mem.PageFaultCount);
 
-				ImGui::TreePop();
+					ImGui::TreePop();
+				}
 			}
-		}
+		};
 
-		if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessMemoryUsage))
-		{
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Process##Process"))
-			{
-				if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualMemoryUsages))
-				{
-					std::string physicalUsageSuffix = "";
-					std::string virtualUsageSuffix  = "";
-					std::string pagedUsageSuffix    = "";
-					std::string nonPagedUsageSuffix = "";
-					double      physicalUsage       = GetScaledBytes(state->ProcessMemoryUsages.CurrentWorkingSet, physicalUsageSuffix);
-					double      virtualUsage        = GetScaledBytes(state->ProcessMemoryUsages.Private, virtualUsageSuffix);
-					double      pagedUsage          = GetScaledBytes(state->ProcessMemoryUsages.CurrentPagedPool, pagedUsageSuffix);
-					double      nonPagedUsage       = GetScaledBytes(state->ProcessMemoryUsages.CurrentNonPagedPool, nonPagedUsageSuffix);
-					ImGui::TextF("Physical:    {:6.2} {:2}", physicalUsage, physicalUsageSuffix.c_str());
-					ImGui::TextF("Virtual:     {:6.2} {:2}", virtualUsage, virtualUsageSuffix.c_str());
-					ImGui::TextF("Paged:       {:6.2} {:2}", pagedUsage, pagedUsageSuffix.c_str());
-					ImGui::TextF("Non Paged:   {:6.2} {:2}", nonPagedUsage, nonPagedUsageSuffix.c_str());
-				}
-				else
-				{
-					std::string usageSuffix = "";
-					double      usage       = GetScaledBytes(state->ProcessMemoryUsages.Private, usageSuffix);
-					ImGui::TextF("Usage:       {:6.2} {:2}", usage, usageSuffix.c_str());
-				}
-
-				if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessMemoryPageFaults))
-					ImGui::TextF("Page Faults: {}", state->ProcessMemoryUsages.PageFaultCount);
-
-				ImGui::TreePop();
-			}
-		}
+		handleData(state->SystemRuntimeData, "System##System");
+		handleData(state->ProcessRuntimeData, "Process##Process");
 	}
 
 	void IOUsages(RuntimeViewState* state)
 	{
-		ImGui::Text("Process / Total");
+		ImGui::Text("Process / System");
 
-		std::string totalReadSuffix;
-		std::string totalWrittenSuffix;
-		std::string processTotalReadSuffix;
-		std::string processTotalWrittenSuffix;
-		double      totalRead           = 0.0;
-		double      totalWritten        = 0.0;
-		double      totalUsage          = 0.0;
-		double      processTotalRead    = 0.0;
-		double      processTotalWritten = 0.0;
-		double      processTotalUsage   = 0.0;
+		auto&        systemData  = state->SystemRuntimeData;
+		auto&        processData = state->ProcessRuntimeData;
+		std::uint8_t selector    = (!!processData.Abilities.hasFlag(Profiler::RuntimeAbilities::IOUsage)) << 1 | !!systemData.Abilities.hasFlag(Profiler::RuntimeAbilities::IOUsage);
+		std::uint8_t selector2   = ((!!processData.Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages)) << 1 | !!systemData.Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages)) & selector;
 
-		std::uint8_t selector = (!state->ProcessIOUsages.empty()) << 1 | !state->TotalIOUsages.empty();
-
-		if (selector & 0b01)
 		{
-			if (state->TotalIOUsages.size() > 1)
+			std::string systemReadSuffix;
+			std::string systemWriteSuffix;
+			std::string systemOtherSuffix;
+			std::string processReadSuffix;
+			std::string processWriteSuffix;
+			std::string processOtherSuffix;
+			double      systemRead   = 0.0;
+			double      systemWrite  = 0.0;
+			double      systemOther  = 0.0;
+			double      systemUsage  = 0.0;
+			double      processRead  = 0.0;
+			double      processWrite = 0.0;
+			double      processOther = 0.0;
+			double      processUsage = 0.0;
+			if (selector & 0b01)
 			{
-				std::uint64_t read    = 0;
-				std::uint64_t written = 0;
-				for (std::size_t i = 0; i < state->TotalIOUsages.size(); ++i)
+				if (selector2 & 0b01)
 				{
-					auto& usage = state->TotalIOUsages[i];
-					read        += usage.BytesRead;
-					written     += usage.BytesWritten;
-					totalUsage  += usage.Usage;
+					std::uint64_t read  = 0;
+					std::uint64_t write = 0;
+					std::uint64_t other = 0;
+					for (std::size_t i = 0; i < systemData.IOEndpoints.size(); ++i)
+					{
+						auto& usage = systemData.IOEndpoints[i];
+						read        += usage.CurReadCount - usage.LastReadCount;
+						write       += usage.CurWriteCount - usage.LastWriteCount;
+						other       += usage.CurOtherCount - usage.LastOtherCount;
+						systemUsage += usage.Usage;
+					}
+					systemRead  = GetScaledBytes(read, systemReadSuffix);
+					systemWrite = GetScaledBytes(write, systemWriteSuffix);
+					systemOther = GetScaledBytes(other, systemOtherSuffix);
+					systemUsage /= systemData.IOEndpoints.size();
 				}
-				totalUsage   /= state->TotalIOUsages.size();
-				totalRead    = GetScaledBytes(read, totalReadSuffix);
-				totalWritten = GetScaledBytes(written, totalWrittenSuffix);
-			}
-			else
-			{
-				auto& usage  = state->TotalIOUsages[0];
-				totalRead    = GetScaledBytes(usage.BytesRead, totalReadSuffix);
-				totalWritten = GetScaledBytes(usage.BytesWritten, totalWrittenSuffix);
-				totalUsage   = usage.Usage;
-			}
-		}
-
-		if (selector & 0b10)
-		{
-			if (state->ProcessIOUsages.size() > 1)
-			{
-				std::uint64_t read    = 0;
-				std::uint64_t written = 0;
-				for (std::size_t i = 0; i < state->ProcessIOUsages.size(); ++i)
+				else
 				{
-					auto& usage       = state->ProcessIOUsages[i];
-					read              += usage.BytesRead;
-					written           += usage.BytesWritten;
-					processTotalUsage += usage.Usage;
+					auto& usage = systemData.IOEndpoints[0];
+					systemRead  = GetScaledBytes(usage.CurReadCount - usage.LastReadCount, systemReadSuffix);
+					systemWrite = GetScaledBytes(usage.CurWriteCount - usage.LastWriteCount, systemWriteSuffix);
+					systemOther = GetScaledBytes(usage.CurOtherCount - usage.LastOtherCount, systemOtherSuffix);
+					systemUsage = usage.Usage;
 				}
-				processTotalUsage   /= state->ProcessIOUsages.size();
-				processTotalRead    = GetScaledBytes(read, processTotalReadSuffix);
-				processTotalWritten = GetScaledBytes(written, processTotalWrittenSuffix);
 			}
-			else
+
+			if (selector & 0b10)
 			{
-				auto& usage         = state->ProcessIOUsages[0];
-				processTotalRead    = GetScaledBytes(usage.BytesRead, processTotalReadSuffix);
-				processTotalWritten = GetScaledBytes(usage.BytesWritten, processTotalWrittenSuffix);
-				processTotalUsage   = usage.Usage;
+				if (selector2 & 0b10)
+				{
+					std::uint64_t read  = 0;
+					std::uint64_t write = 0;
+					std::uint64_t other = 0;
+					for (std::size_t i = 0; i < processData.IOEndpoints.size(); ++i)
+					{
+						auto& usage  = processData.IOEndpoints[i];
+						read         += usage.CurReadCount - usage.LastReadCount;
+						write        += usage.CurWriteCount - usage.LastWriteCount;
+						other        += usage.CurOtherCount - usage.LastOtherCount;
+						processUsage += usage.Usage;
+					}
+					processRead  = GetScaledBytes(read, processReadSuffix);
+					processWrite = GetScaledBytes(write, processWriteSuffix);
+					processOther = GetScaledBytes(other, processOtherSuffix);
+					processUsage /= processData.IOEndpoints.size();
+				}
+				else
+				{
+					auto& usage  = processData.IOEndpoints[0];
+					processRead  = GetScaledBytes(usage.CurReadCount - usage.LastReadCount, processReadSuffix);
+					processWrite = GetScaledBytes(usage.CurWriteCount - usage.LastWriteCount, processWriteSuffix);
+					processOther = GetScaledBytes(usage.CurOtherCount - usage.LastOtherCount, processOtherSuffix);
+					processUsage = usage.Usage;
+				}
+			}
+
+			systemReadSuffix   += "/s";
+			systemWriteSuffix  += "/s";
+			systemOtherSuffix  += "/s";
+			processReadSuffix  += "/s";
+			processWriteSuffix += "/s";
+			processOtherSuffix += "/s";
+
+			switch (selector)
+			{
+			case 0b00: return; // Dafuq are you doing in here???
+			case 0b01:
+				ImGui::TextF("Total (R/W/O %): (---.-- B/s , ---.-- B/s , ---.-- B/s ) ---.--% / ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}%",
+							 systemRead,
+							 systemReadSuffix,
+							 systemWrite,
+							 systemWriteSuffix,
+							 systemOther,
+							 systemOtherSuffix,
+							 systemUsage * 100.0);
+				break;
+			case 0b10:
+				ImGui::TextF("Total (R/W/O %): ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}% / (---.-- B/s , ---.-- B/s , ---.-- B/s ) ---.--%",
+							 processRead,
+							 processReadSuffix,
+							 processWrite,
+							 processWriteSuffix,
+							 processOther,
+							 processOtherSuffix,
+							 processUsage * 100.0);
+				break;
+			case 0b11:
+				ImGui::TextF("Total (R/W/O %): ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}% / ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}%",
+							 processRead,
+							 processReadSuffix,
+							 processWrite,
+							 processWriteSuffix,
+							 processOther,
+							 processOtherSuffix,
+							 processUsage * 100.0,
+							 systemRead,
+							 systemReadSuffix,
+							 systemWrite,
+							 systemWriteSuffix,
+							 systemOther,
+							 systemOtherSuffix,
+							 systemUsage * 100.0);
+				break;
 			}
 		}
 
-		totalReadSuffix           += "/s";
-		totalWrittenSuffix        += "/s";
-		processTotalReadSuffix    += "/s";
-		processTotalWrittenSuffix += "/s";
-
-		switch (selector)
-		{
-		case 0b00: return; // Dafuq are you doing in here???
-		case 0b01:
-			ImGui::TextF("Total (I/O %): (---.-- B/s , ---.-- B/s ) ---.--% / ({:6.2} {:4}, {:6.2} {:4}) {:6.2}%",
-						 totalRead,
-						 totalReadSuffix.c_str(),
-						 totalWritten,
-						 totalWrittenSuffix.c_str(),
-						 totalUsage * 100.0);
-			break;
-		case 0b10:
-			ImGui::TextF("Total (I/O %): ({:6.2} {:4}, {:6.2} {:4}) {:6.2}% / (---.-- B/s , ---.-- B/s ) ---.--%",
-						 processTotalRead,
-						 processTotalReadSuffix.c_str(),
-						 processTotalWritten,
-						 processTotalWrittenSuffix.c_str(),
-						 processTotalUsage * 100.0);
-			break;
-		case 0b11:
-			ImGui::TextF("Total (I/O %): ({:6.2} {:4}, {:6.2} {:4}) {:6.2}% / ({:6.2} {:4}, {:6.2} {:4}) {:6.2}%",
-						 processTotalRead,
-						 processTotalReadSuffix.c_str(),
-						 processTotalWritten,
-						 processTotalWrittenSuffix.c_str(),
-						 processTotalUsage * 100.0,
-						 totalRead,
-						 totalReadSuffix.c_str(),
-						 totalWritten,
-						 totalWrittenSuffix.c_str(),
-						 totalUsage * 100.0);
-			break;
-		}
-
-		std::size_t numIOEndpoints = state->IOEndpointInfos.size();
-		if (numIOEndpoints <= 1)
+		if (selector2 == 0)
 			return;
-
-		std::uint8_t selector2 = static_cast<std::uint8_t>(state->Abilities.hasFlag(Profiler::RuntimeAbilities::PerProcessIndividualIOUsages)) << 1 | static_cast<std::uint8_t>(state->Abilities.hasFlag(Profiler::RuntimeAbilities::IndividualIOUsages));
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Individual Endpoints##IndividualEndpoints"))
 		{
+			std::size_t maxNameLength  = 0;
+			std::size_t numIOEndpoints = std::max(processData.IOEndpoints.size(), systemData.IOEndpoints.size());
 			for (std::size_t i = 0; i < numIOEndpoints; ++i)
 			{
-				auto& info = state->IOEndpointInfos[i];
-
-				std::uint8_t selector3 = ((i < state->ProcessIOUsages.size()) << 1 | (i < state->TotalIOUsages.size())) & selector2;
-
-				std::string readSuffix;
-				std::string writtenSuffix;
-				std::string processReadSuffix;
-				std::string processWrittenSuffix;
-				double      read           = 0.0;
-				double      written        = 0.0;
-				double      usage          = 0.0;
-				double      processRead    = 0.0;
-				double      processWritten = 0.0;
-				double      processUsage   = 0.0;
-
-				if (selector3 & 0b01)
+				std::string_view name;
+				if (selector2 & 0b01)
 				{
-					auto& usg = state->TotalIOUsages[i];
-					read      = GetScaledBytes(usg.BytesRead, readSuffix);
-					written   = GetScaledBytes(usg.BytesWritten, writtenSuffix);
-					usage     = usg.Usage;
+					auto& endpoint = systemData.IOEndpoints[i];
+					name           = endpoint.Name;
 				}
 
-				if (selector3 & 0b10)
+				if (selector2 & 0b10)
 				{
-					auto& usg      = state->ProcessIOUsages[i];
-					processRead    = GetScaledBytes(usg.BytesRead, processReadSuffix);
-					processWritten = GetScaledBytes(usg.BytesWritten, processWrittenSuffix);
-					processUsage   = usg.Usage;
+					auto& endpoint = processData.IOEndpoints[i];
+					if (name.empty())
+						name = endpoint.Name;
 				}
 
-				readSuffix           += "/s";
-				writtenSuffix        += "/s";
-				processReadSuffix    += "/s";
-				processWrittenSuffix += "/s";
+				maxNameLength = std::max(maxNameLength, name.size());
+			}
 
-				switch (selector3)
+			for (std::size_t i = 0; i < numIOEndpoints; ++i)
+			{
+				std::string      systemReadSuffix;
+				std::string      systemWriteSuffix;
+				std::string      systemOtherSuffix;
+				std::string      processReadSuffix;
+				std::string      processWriteSuffix;
+				std::string      processOtherSuffix;
+				double           systemRead   = 0.0;
+				double           systemWrite  = 0.0;
+				double           systemOther  = 0.0;
+				double           systemUsage  = 0.0;
+				double           processRead  = 0.0;
+				double           processWrite = 0.0;
+				double           processOther = 0.0;
+				double           processUsage = 0.0;
+				std::string_view name;
+
+				if (selector2 & 0b01)
+				{
+					auto& endpoint = systemData.IOEndpoints[i];
+					systemRead     = GetScaledBytes(endpoint.CurReadCount - endpoint.LastReadCount, systemReadSuffix);
+					systemWrite    = GetScaledBytes(endpoint.CurWriteCount - endpoint.LastWriteCount, systemWriteSuffix);
+					systemOther    = GetScaledBytes(endpoint.CurOtherCount - endpoint.LastOtherCount, systemOtherSuffix);
+					systemUsage    = endpoint.Usage;
+					name           = endpoint.Name;
+				}
+
+				if (selector2 & 0b10)
+				{
+					auto& endpoint = processData.IOEndpoints[i];
+					processRead    = GetScaledBytes(endpoint.CurReadCount - endpoint.LastReadCount, processReadSuffix);
+					processWrite   = GetScaledBytes(endpoint.CurWriteCount - endpoint.LastWriteCount, processWriteSuffix);
+					processOther   = GetScaledBytes(endpoint.CurOtherCount - endpoint.LastOtherCount, processOtherSuffix);
+					processUsage   = endpoint.Usage;
+					if (name.empty())
+						name = endpoint.Name;
+				}
+
+				systemReadSuffix   += "/s";
+				systemWriteSuffix  += "/s";
+				systemOtherSuffix  += "/s";
+				processReadSuffix  += "/s";
+				processWriteSuffix += "/s";
+				processOtherSuffix += "/s";
+
+				switch (selector2)
 				{
 				case 0b00: break; // Dafuq happened here???
 				case 0b01:
-					ImGui::TextF("{} (I/O %): (---.-- B/s , ---.-- B/s ) ---.--% / ({:6.2} {:4}, {:6.2} {:4}) {:6.2}%",
-								 info.Name.c_str(),
-								 read,
-								 readSuffix.c_str(),
-								 written,
-								 writtenSuffix.c_str(),
-								 usage * 100.0);
+					ImGui::TextF("{:>{}} (R/W/O %): (---.-- B/s , ---.-- B/s , ---.-- B/s ) ---.--% / ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}%",
+								 name,
+								 maxNameLength,
+								 systemRead,
+								 systemReadSuffix,
+								 systemWrite,
+								 systemWriteSuffix,
+								 systemOther,
+								 systemOtherSuffix,
+								 systemUsage * 100.0);
 					break;
 				case 0b10:
-					ImGui::TextF("{} (I/O %): ({:6.2} {:4}, {:6.2} {:4}) {:6.2}% / (---.-- B/s , ---.-- B/s ) ---.--%",
-								 info.Name.c_str(),
+					ImGui::TextF("{:>{}} (R/W/O %): ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}% / (---.-- B/s , ---.-- B/s , ---.-- B/s ) ---.--%",
+								 name,
+								 maxNameLength,
 								 processRead,
-								 processReadSuffix.c_str(),
-								 processWritten,
-								 processWrittenSuffix.c_str(),
+								 processReadSuffix,
+								 processWrite,
+								 processWriteSuffix,
+								 processOther,
+								 processOtherSuffix,
 								 processUsage * 100.0);
 					break;
 				case 0b11:
-					ImGui::TextF("{} (I/O %): ({:6.2} {:4}, {:6.2} {:4}) {:6.2}% / ({:6.2} {:4}, {:6.2} {:4}) {:6.2}%",
-								 info.Name.c_str(),
+					ImGui::TextF("{:>{}} (R/W/O %): ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}% / ({:6.2f} {:4}, {:6.2f} {:4}, {:6.2f} {:4}) {:6.2f}%",
+								 name,
+								 maxNameLength,
 								 processRead,
-								 processReadSuffix.c_str(),
-								 processWritten,
-								 processWrittenSuffix.c_str(),
+								 processReadSuffix,
+								 processWrite,
+								 processWriteSuffix,
+								 processOther,
+								 processOtherSuffix,
 								 processUsage * 100.0,
-								 read,
-								 readSuffix.c_str(),
-								 written,
-								 writtenSuffix.c_str(),
-								 usage * 100.0);
+								 systemRead,
+								 systemReadSuffix,
+								 systemWrite,
+								 systemWriteSuffix,
+								 systemOther,
+								 systemOtherSuffix,
+								 systemUsage * 100.0);
 					break;
 				}
 			}
@@ -454,19 +489,19 @@ namespace UI
 	{
 		ImGui::Begin("Runtime View##RuntimeView", p_open);
 
-		if (!state->TotalCoreUsages.empty() ||
-			!state->ProcessCoreUsages.empty())
+		auto support = state->SystemRuntimeData.Abilities | state->ProcessRuntimeData.Abilities;
+
+		if (support.hasFlag(Profiler::RuntimeAbilities::CPUUsage))
 		{
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("CPU Usage##CPUUsage"))
 			{
-				CoreUsages(state);
+				CPUUsages(state);
 				ImGui::TreePop();
 			}
 		}
 
-		if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::MemoryUsage | Profiler::RuntimeAbilities::IndividualMemoryUsages |
-									 Profiler::RuntimeAbilities::PerProcessMemoryUsage | Profiler::RuntimeAbilities::PerProcessIndividualMemoryUsages))
+		if (support.hasFlag(Profiler::RuntimeAbilities::MemoryUsage))
 		{
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Memory Usage##MemoryUsage"))
@@ -476,8 +511,7 @@ namespace UI
 			}
 		}
 
-		if (state->Abilities.hasFlag(Profiler::RuntimeAbilities::IOUsage | Profiler::RuntimeAbilities::IndividualIOUsages |
-									 Profiler::RuntimeAbilities::PerProcessIOUsage | Profiler::RuntimeAbilities::PerProcessIndividualIOUsages))
+		if (support.hasFlag(Profiler::RuntimeAbilities::IOUsage))
 		{
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("IO Usage##IOUsage"))

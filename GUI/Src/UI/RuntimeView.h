@@ -8,18 +8,9 @@ namespace UI
 {
 	struct RuntimeViewState
 	{
-		Profiler::ERuntimeAbilities Abilities;
-		Profiler::Process           Process;
-
-		std::vector<Profiler::IOEndpointInfo> IOEndpointInfos;
-
-		std::vector<Profiler::CoreCounter> TotalCoreUsages;
-		Profiler::MemoryCounters           TotalMemoryUsages;
-		std::vector<Profiler::IOCounter>   TotalIOUsages;
-
-		std::vector<Profiler::CoreCounter> ProcessCoreUsages;
-		Profiler::MemoryCounters           ProcessMemoryUsages;
-		std::vector<Profiler::IOCounter>   ProcessIOUsages;
+		Profiler::RuntimeData SystemRuntimeData;
+		Profiler::RuntimeData ProcessRuntimeData;
+		Profiler::Process     Process;
 	};
 
 	void UpdateRuntimeView(RuntimeViewState* state);

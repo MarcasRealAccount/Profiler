@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include <string>
+#include <vector>
 
 namespace Profiler
 {
@@ -15,68 +16,82 @@ namespace Profiler
 	{
 		static constexpr ERuntimeAbilities None = 0x0;
 
-		static constexpr ERuntimeAbilities CoreUsage   = 0x01;
+		static constexpr ERuntimeAbilities CPUUsage    = 0x01;
 		static constexpr ERuntimeAbilities MemoryUsage = 0x02;
 		static constexpr ERuntimeAbilities IOUsage     = 0x04;
 
-		static constexpr ERuntimeAbilities IndividualCoreUsages   = 0x10;
+		static constexpr ERuntimeAbilities IndividualCPUUsages    = 0x10;
 		static constexpr ERuntimeAbilities IndividualMemoryUsages = 0x20;
 		static constexpr ERuntimeAbilities IndividualIOUsages     = 0x40;
 
-		static constexpr ERuntimeAbilities PerProcessCoreUsage   = 0x100;
-		static constexpr ERuntimeAbilities PerProcessMemoryUsage = 0x200;
-		static constexpr ERuntimeAbilities PerProcessIOUsage     = 0x400;
-
-		static constexpr ERuntimeAbilities PerProcessIndividualCoreUsages   = 0x1000;
-		static constexpr ERuntimeAbilities PerProcessIndividualMemoryUsages = 0x2000;
-		static constexpr ERuntimeAbilities PerProcessIndividualIOUsages     = 0x4000;
-
-		static constexpr ERuntimeAbilities MemoryPageFaults           = 0x1'0000;
-		static constexpr ERuntimeAbilities PerProcessMemoryPageFaults = 0x2'0000;
+		static constexpr ERuntimeAbilities MemoryPageFaults = 0x100;
 	} // namespace RuntimeAbilities
 
 	using Process = std::uint64_t;
 
-	struct IOEndpointInfo
+	struct CPUData
 	{
-		std::string Name;
+		std::uint64_t LastUserTime = 0;
+		std::uint64_t LastSysTime  = 0;
+		std::uint64_t CurUserTime  = 0;
+		std::uint64_t CurSysTime   = 0;
+		std::uint64_t IdleTime     = 0;
+		double        Usage        = 0.0;
 	};
 
-	ERuntimeAbilities GetRuntimeAbilities();
+	struct MemoryData
+	{
+		std::uint64_t PageFaultCount = 0;
+		std::uint64_t PhysicalTotal  = 0;
+		std::uint64_t PhysicalUsage  = 0;
+		std::uint64_t VirtualTotal   = 0;
+		std::uint64_t VirtualUsage   = 0;
+		std::uint64_t PagedUsage     = 0;
+		std::uint64_t NonPagedUsage  = 0;
+	};
 
-	Process SystemProcess();
+	enum class EIOEndpointType
+	{
+		Total,
+		PhysicalDrive,
+		NetworkAdapter
+	};
+
+	struct IOEndpointData
+	{
+		EIOEndpointType Type = EIOEndpointType::Total;
+		std::uint64_t   ID   = 0;
+		std::string     Name;
+
+		std::uint64_t LastReadCount  = 0;
+		std::uint64_t LastWriteCount = 0;
+		std::uint64_t LastOtherCount = 0;
+		std::uint64_t CurReadCount   = 0;
+		std::uint64_t CurWriteCount  = 0;
+		std::uint64_t CurOtherCount  = 0;
+
+		std::uint64_t LastReadTime  = 0;
+		std::uint64_t LastWriteTime = 0;
+		std::uint64_t LastOtherTime = 0;
+		std::uint64_t CurReadTime   = 0;
+		std::uint64_t CurWriteTime  = 0;
+		std::uint64_t CurOtherTime  = 0;
+		std::uint64_t IdleTime      = 0;
+		double        Usage         = 0.0;
+	};
+
+	struct RuntimeData
+	{
+		std::uint64_t LastTime = 0;
+		std::uint64_t CurTime  = 0;
+
+		ERuntimeAbilities           Abilities;
+		std::vector<CPUData>        CPUs;
+		MemoryData                  Memory;
+		std::vector<IOEndpointData> IOEndpoints;
+	};
+
+	Process GetSystemProcess();
 	Process GetCurrentProcess();
-
-	std::size_t GetTotalCoreCount();
-	std::size_t GetIOEndpointCount(bool* pChanged = nullptr);
-	void        GetIOEndpointInfos(std::size_t endpointCount, IOEndpointInfo* infos);
-
-	struct CoreCounter
-	{
-		double Usage;
-	};
-
-	struct MemoryCounters
-	{
-		std::size_t PageFaultCount;
-		std::size_t PeakWorkingSet;
-		std::size_t CurrentWorkingSet;
-		std::size_t PeakPagedPool;
-		std::size_t CurrentPagedPool;
-		std::size_t PeakNonPagedPool;
-		std::size_t CurrentNonPagedPool;
-		std::size_t PeakPrivate;
-		std::size_t Private;
-	};
-
-	struct IOCounter
-	{
-		std::size_t BytesRead;
-		std::size_t BytesWritten;
-		double      Usage;
-	};
-
-	void GetCoreUsages(Process process, std::size_t coreCount, CoreCounter* counters);
-	void GetMemoryUsage(Process process, MemoryCounters& counters);
-	void GetIOUsages(Process process, std::size_t endpointCount, IOCounter* counters);
+	bool    PollData(Process process, RuntimeData* runtimeData);
 } // namespace Profiler
