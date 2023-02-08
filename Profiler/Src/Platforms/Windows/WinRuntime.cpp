@@ -160,7 +160,14 @@ namespace Profiler
 
 		DWORD            bytesReturned = 0;
 		DISK_PERFORMANCE diskPerf {};
-		if (!DeviceIoControl(diskHandle, IOCTL_DISK_PERFORMANCE, nullptr, 0, &diskPerf, sizeof(diskPerf), &bytesReturned, nullptr))
+		if (!DeviceIoControl(diskHandle,
+							 IOCTL_DISK_PERFORMANCE,
+							 nullptr,
+							 0,
+							 &diskPerf,
+							 sizeof(diskPerf),
+							 &bytesReturned,
+							 nullptr))
 		{
 			CloseHandle(diskHandle);
 			return false;
