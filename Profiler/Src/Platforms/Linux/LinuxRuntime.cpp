@@ -129,7 +129,6 @@ namespace Profiler
 
 	static void UpdateNetworkAdapters()
 	{
-		// TODO(MarcasRealAccount): Enumerate network adapters and update them
 		bool opened  = false;
 		auto content = ReadAllContent("/proc/net/dev", &opened);
 		if (!opened)
