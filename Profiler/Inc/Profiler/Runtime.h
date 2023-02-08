@@ -46,8 +46,6 @@ namespace Profiler
 		std::uint64_t PhysicalUsage  = 0;
 		std::uint64_t VirtualTotal   = 0;
 		std::uint64_t VirtualUsage   = 0;
-		std::uint64_t PagedUsage     = 0;
-		std::uint64_t NonPagedUsage  = 0;
 	};
 
 	enum class EIOEndpointType

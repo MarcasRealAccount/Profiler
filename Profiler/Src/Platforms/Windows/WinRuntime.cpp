@@ -359,8 +359,6 @@ namespace Profiler
 					mem.PhysicalUsage  = memoryCounters.ullTotalPhys - memoryCounters.ullAvailPhys;
 					mem.VirtualTotal   = memoryCounters.ullTotalPageFile;
 					mem.VirtualTotal   = memoryCounters.ullTotalPageFile - memoryCounters.ullAvailPageFile;
-					mem.PagedUsage     = 0;
-					mem.NonPagedUsage  = 0;
 				}
 				else
 				{
@@ -370,8 +368,6 @@ namespace Profiler
 					mem.PhysicalUsage  = 0;
 					mem.VirtualTotal   = 0;
 					mem.VirtualTotal   = 0;
-					mem.PagedUsage     = 0;
-					mem.NonPagedUsage  = 0;
 				}
 			}
 			else
@@ -385,8 +381,6 @@ namespace Profiler
 					mem.PhysicalUsage  = memCounters.WorkingSetSize;
 					mem.VirtualTotal   = memCounters.PeakPagefileUsage;
 					mem.VirtualTotal   = memCounters.PagefileUsage;
-					mem.PagedUsage     = memCounters.QuotaPagedPoolUsage;
-					mem.NonPagedUsage  = memCounters.QuotaNonPagedPoolUsage;
 				}
 				else
 				{
@@ -396,8 +390,6 @@ namespace Profiler
 					mem.PhysicalUsage  = 0;
 					mem.VirtualTotal   = 0;
 					mem.VirtualTotal   = 0;
-					mem.PagedUsage     = 0;
-					mem.NonPagedUsage  = 0;
 				}
 			}
 		}

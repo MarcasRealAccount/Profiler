@@ -177,14 +177,10 @@ namespace UI
 						std::string physicalTotalSuffix = "";
 						std::string virtualUsageSuffix  = "";
 						std::string virtualTotalSuffix  = "";
-						std::string pagedUsageSuffix    = "";
-						std::string nonPagedUsageSuffix = "";
 						double      physicalUsage       = GetScaledBytes(mem.PhysicalUsage, physicalUsageSuffix);
 						double      physicalTotal       = GetScaledBytes(mem.PhysicalTotal, physicalTotalSuffix);
 						double      virtualUsage        = GetScaledBytes(mem.VirtualUsage, virtualUsageSuffix);
 						double      virtualTotal        = GetScaledBytes(mem.VirtualTotal, virtualTotalSuffix);
-						double      pagedUsage          = GetScaledBytes(mem.PagedUsage, pagedUsageSuffix);
-						double      nonPagedUsage       = GetScaledBytes(mem.NonPagedUsage, nonPagedUsageSuffix);
 						ImGui::TextF("Physical:    {:6.2f} {:2} / {:6.2f} {:2} ({:6.2f}%)",
 									 physicalUsage,
 									 physicalUsageSuffix,
@@ -197,8 +193,6 @@ namespace UI
 									 virtualTotal,
 									 virtualTotalSuffix,
 									 static_cast<double>(mem.VirtualUsage) / static_cast<double>(mem.VirtualTotal) * 100.0);
-						ImGui::TextF("Paged:       {:6.2f} {:2}", pagedUsage, pagedUsageSuffix);
-						ImGui::TextF("Non Paged:   {:6.2f} {:2}", nonPagedUsage, nonPagedUsageSuffix);
 					}
 					else
 					{

@@ -1,6 +1,9 @@
 #include "Profiler/Utils/Core.h"
 
-#if BUILD_IS_SYSTEM_LINUX
+#define USE (BUILD_IS_SYSTEM_WINDOWS || BUILD_IS_SYSTEM_LINUX)
+
+#if USE
+// #if BUILD_IS_SYSTEM_LINUX
 	#include "Profiler/Runtime.h"
 
 	#include <chrono>
@@ -283,8 +286,6 @@ namespace Profiler
 		mem.PhysicalUsage  = 0;
 		mem.VirtualTotal   = 0;
 		mem.VirtualUsage   = 0;
-		mem.PagedUsage     = 0;
-		mem.NonPagedUsage  = 0;
 
 		std::uint64_t MemTotal = 0, MemFree = 0, VmallocTotal = 0, VmallocUsed = 0;
 
