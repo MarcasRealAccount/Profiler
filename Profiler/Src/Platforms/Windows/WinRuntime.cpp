@@ -12,9 +12,19 @@
 
 	#include <winioctl.h>
 	#include <psapi.h>
+	#include <winternl.h>
 
 namespace Profiler
 {
+	using PNtQuerySystemInformation = __kernel_entry NTSTATUS (*NTAPI)(
+		IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+		OUT PVOID                   SystemInformation,
+		IN ULONG                    SystemInformationLength,
+		OUT PULONG ReturnLength     OPTIONAL);
+
+	static HMODULE                   s_Ntdll;
+	static PNtQuerySystemInformation s_NtQuerySystemInformation;
+
 	struct WindowsIOEndpointData : public IOEndpointData
 	{
 		std::wstring UNCPath;
@@ -23,10 +33,17 @@ namespace Profiler
 	static struct WindowsRuntimeData
 	{
 		WindowsRuntimeData()
-			: VolumeNameBuffer(new wchar_t[32767]) {}
+			: VolumeNameBuffer(new wchar_t[32767])
+		{
+			s_Ntdll = LoadLibraryW(L"ntdll.dll");
+			if (s_Ntdll)
+				s_NtQuerySystemInformation = reinterpret_cast<PNtQuerySystemInformation>(GetProcAddress(s_Ntdll, "NtQuerySystemInformation"));
+		}
 
 		~WindowsRuntimeData()
 		{
+			if (s_Ntdll)
+				FreeLibrary(s_Ntdll);
 			delete[] VolumeNameBuffer;
 		}
 
@@ -308,7 +325,7 @@ namespace Profiler
 		std::uint64_t curGetTime = std::bit_cast<std::uint64_t>(curTime) * 100;
 		std::uint64_t timeSpent  = curGetTime - runtimeData->CurTime;
 
-		if (timeSpent < 250'000'000ULL)
+		if (timeSpent < 2500'000'000ULL)
 			return false;
 
 		runtimeData->LastTime = runtimeData->CurTime;
@@ -327,32 +344,73 @@ namespace Profiler
 
 		// Gather CPU data
 		{
-			runtimeData->CPUs.resize(1); // TODO(MarcasRealAccount): Implement support for individual cpu usages (possibly with per process individual cpu usages too)
-
-			FILETIME kernelTime, userTime;
 			if (process == 0)
 			{
-				FILETIME idleTime;
-				GetSystemTimes(&idleTime, &kernelTime, &userTime);
-				kernelTime = std::bit_cast<FILETIME>(std::bit_cast<std::uint64_t>(kernelTime) - std::bit_cast<std::uint64_t>(idleTime));
+				std::size_t coreCount = std::thread::hardware_concurrency();
+
+				SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION* performanceInfo = new SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION[coreCount];
+
+				ULONG length = 0;
+				if (s_NtQuerySystemInformation &&
+					NT_SUCCESS(s_NtQuerySystemInformation(SystemProcessorPerformanceInformation,
+														  performanceInfo,
+														  sizeof(performanceInfo[0]) * coreCount,
+														  &length)))
+				{
+					runtimeData->CPUs.resize(coreCount);
+					for (std::size_t i = 0; i < coreCount; ++i)
+					{
+						auto& perf       = performanceInfo[i];
+						auto& cpu        = runtimeData->CPUs[i];
+						cpu.LastSysTime  = cpu.CurSysTime;
+						cpu.LastUserTime = cpu.CurUserTime;
+						cpu.CurSysTime   = (perf.KernelTime.QuadPart - perf.IdleTime.QuadPart) * 100;
+						cpu.CurUserTime  = perf.UserTime.QuadPart * 100;
+					}
+				}
+				else
+				{
+					runtimeData->CPUs.resize(1);
+					auto& cpu = runtimeData->CPUs[0];
+
+					FILETIME idleTime, kernelTime, userTime;
+					GetSystemTimes(&idleTime, &kernelTime, &userTime);
+
+					cpu.LastSysTime  = cpu.CurSysTime;
+					cpu.LastUserTime = cpu.CurUserTime;
+					cpu.CurSysTime   = (std::bit_cast<std::uint64_t>(kernelTime) - std::bit_cast<std::uint64_t>(idleTime)) * 100;
+					cpu.CurUserTime  = std::bit_cast<std::uint64_t>(userTime) * 100;
+				}
+				delete[] performanceInfo;
 			}
 			else
 			{
-				FILETIME startTime, exitTime;
+				runtimeData->CPUs.resize(1);
+				auto& cpu = runtimeData->CPUs[0];
+
+				FILETIME startTime, exitTime, kernelTime, userTime;
 				GetProcessTimes(processHandle, &startTime, &exitTime, &kernelTime, &userTime);
+
+				cpu.LastSysTime  = cpu.CurSysTime;
+				cpu.LastUserTime = cpu.CurUserTime;
+				cpu.CurSysTime   = std::bit_cast<std::uint64_t>(kernelTime) * 100;
+				cpu.CurUserTime  = std::bit_cast<std::uint64_t>(userTime) * 100;
 			}
 
 			// TODO(MarcasRealAccount): It seems like the time given by the functions above might do a predivision by core count or might be very inaccurate.
-			double totalTimeSpent = static_cast<double>(timeSpent) * std::thread::hardware_concurrency();
+			double totalTimeSpent = static_cast<double>(timeSpent);
+			if (runtimeData->CPUs.size() > 1)
+				runtimeData->Abilities |= RuntimeAbilities::IndividualCPUUsages;
+			else
+				totalTimeSpent *= std::thread::hardware_concurrency();
 
-			auto& cpu               = runtimeData->CPUs[0];
-			cpu.LastSysTime         = cpu.CurSysTime;
-			cpu.LastUserTime        = cpu.CurUserTime;
-			cpu.CurSysTime          = std::bit_cast<std::uint64_t>(kernelTime) * 100;
-			cpu.CurUserTime         = std::bit_cast<std::uint64_t>(userTime) * 100;
-			std::uint64_t totalTime = ((cpu.CurSysTime - cpu.LastSysTime) + (cpu.CurUserTime - cpu.LastUserTime));
-			cpu.IdleTime            = static_cast<std::uint64_t>(totalTimeSpent - totalTime);
-			cpu.Usage               = static_cast<double>(totalTime) / totalTimeSpent;
+			for (std::size_t i = 0; i < runtimeData->CPUs.size(); ++i)
+			{
+				auto&         cpu       = runtimeData->CPUs[i];
+				std::uint64_t totalTime = ((cpu.CurSysTime - cpu.LastSysTime) + (cpu.CurUserTime - cpu.LastUserTime));
+				cpu.IdleTime            = static_cast<std::uint64_t>(totalTimeSpent - totalTime);
+				cpu.Usage               = static_cast<double>(totalTime) / totalTimeSpent;
+			}
 		}
 
 		// Gather Memory data
