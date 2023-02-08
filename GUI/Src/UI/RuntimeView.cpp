@@ -137,7 +137,7 @@ namespace UI
 		if (selector2 == 0)
 			return; // No individual core information
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		ImGui::SetNextItemOpen(false, ImGuiCond_Once);
 		if (ImGui::TreeNode("Individual Cores##IndividualCores"))
 		{
 			std::size_t numCores     = std::max(systemData.CPUs.size(), processData.CPUs.size());

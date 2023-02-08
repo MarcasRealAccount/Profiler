@@ -176,8 +176,8 @@ namespace Profiler
 		endpoint.CurReadCount  = diskPerf.ReadCount;
 		endpoint.CurWriteCount = diskPerf.WriteCount;
 		endpoint.CurOtherCount = 0;
-		endpoint.CurReadTime   = diskPerf.ReadTime.QuadPart;
-		endpoint.CurWriteTime  = diskPerf.WriteTime.QuadPart;
+		endpoint.CurReadTime   = diskPerf.ReadTime.QuadPart * 100;
+		endpoint.CurWriteTime  = diskPerf.WriteTime.QuadPart * 100;
 		endpoint.CurOtherTime  = 0;
 
 		CloseHandle(diskHandle);
@@ -271,7 +271,7 @@ namespace Profiler
 		s_WindowsRuntimeData.Mutex.lock();
 		std::uint64_t timeSpent = curGetTime - s_WindowsRuntimeData.CurTime;
 
-		if (timeSpent > 2'500'000ULL)
+		if (timeSpent > 250'000'000ULL)
 		{
 			s_WindowsRuntimeData.LastTime = s_WindowsRuntimeData.CurTime;
 			s_WindowsRuntimeData.CurTime  = curGetTime;
@@ -305,10 +305,10 @@ namespace Profiler
 
 		FILETIME curTime;
 		GetSystemTimeAsFileTime(&curTime);
-		std::uint64_t curGetTime = std::bit_cast<std::uint64_t>(curTime);
+		std::uint64_t curGetTime = std::bit_cast<std::uint64_t>(curTime) * 100;
 		std::uint64_t timeSpent  = curGetTime - runtimeData->CurTime;
 
-		if (timeSpent < 2'500'000ULL)
+		if (timeSpent < 250'000'000ULL)
 			return false;
 
 		runtimeData->LastTime = runtimeData->CurTime;
@@ -342,14 +342,17 @@ namespace Profiler
 				GetProcessTimes(processHandle, &startTime, &exitTime, &kernelTime, &userTime);
 			}
 
+			// TODO(MarcasRealAccount): It seems like the time given by the functions above might do a predivision by core count or might be very inaccurate.
+			double totalTimeSpent = static_cast<double>(timeSpent) * std::thread::hardware_concurrency();
+
 			auto& cpu               = runtimeData->CPUs[0];
 			cpu.LastSysTime         = cpu.CurSysTime;
 			cpu.LastUserTime        = cpu.CurUserTime;
-			cpu.CurSysTime          = std::bit_cast<std::uint64_t>(kernelTime);
-			cpu.CurUserTime         = std::bit_cast<std::uint64_t>(userTime);
+			cpu.CurSysTime          = std::bit_cast<std::uint64_t>(kernelTime) * 100;
+			cpu.CurUserTime         = std::bit_cast<std::uint64_t>(userTime) * 100;
 			std::uint64_t totalTime = ((cpu.CurSysTime - cpu.LastSysTime) + (cpu.CurUserTime - cpu.LastUserTime));
-			cpu.IdleTime            = (timeSpent * std::thread::hardware_concurrency()) - totalTime;
-			cpu.Usage               = static_cast<double>(totalTime) / static_cast<double>(timeSpent * std::thread::hardware_concurrency());
+			cpu.IdleTime            = static_cast<std::uint64_t>(totalTimeSpent - totalTime);
+			cpu.Usage               = static_cast<double>(totalTime) / totalTimeSpent;
 		}
 
 		// Gather Memory data

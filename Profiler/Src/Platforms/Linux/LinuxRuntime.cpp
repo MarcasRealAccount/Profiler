@@ -1,9 +1,6 @@
 #include "Profiler/Utils/Core.h"
 
-#define USE (BUILD_IS_SYSTEM_WINDOWS || BUILD_IS_SYSTEM_LINUX)
-
-#if USE
-// #if BUILD_IS_SYSTEM_LINUX
+#if BUILD_IS_SYSTEM_LINUX
 	#include "Profiler/Runtime.h"
 
 	#include <chrono>
@@ -133,6 +130,60 @@ namespace Profiler
 	static void UpdateNetworkAdapters()
 	{
 		// TODO(MarcasRealAccount): Enumerate network adapters and update them
+		bool opened  = false;
+		auto content = ReadAllContent("/proc/net/dev", &opened);
+		if (!opened)
+			return;
+
+		auto& ioEndpoints = s_LinuxRuntimeData.IOEndpoints;
+
+		std::string_view contentView(content);
+		std::size_t      offset     = 0;
+		std::size_t      lineNumber = 0;
+		while (offset < contentView.size())
+		{
+			++lineNumber;
+			std::size_t lineEnd = contentView.find_first_of('\n', offset + 1);
+			if (lineEnd == std::string::npos)
+				break;
+			std::string_view line = contentView.substr(offset, lineEnd - offset);
+			offset                = lineEnd + 1;
+			if (line.empty())
+				continue;
+			if (lineNumber < 3)
+				continue;
+
+			IOEndpointData endpoint {};
+			endpoint.Type       = EIOEndpointType::NetworkAdapter;
+			std::size_t nameEnd = line.find_first_of(':');
+			endpoint.Name       = line.substr(0, nameEnd);
+			endpoint.ID         = std::hash<std::string> {}(endpoint.Name);
+
+			std::uint64_t fieldIndex = 0;
+			std::size_t   subOffset  = line.find_first_not_of(' ', nameEnd + 1);
+			while (subOffset < line.size())
+			{
+				std::size_t end = line.find_first_of(' ', subOffset + 1);
+				if (end == std::string::npos)
+					break;
+				std::size_t start = subOffset;
+				subOffset         = end + 1;
+				++fieldIndex;
+
+				if (fieldIndex != 1 && fieldIndex != 9)
+					continue;
+
+				std::uint64_t val = std::strtoull(line.data() + start, nullptr, 10);
+				switch (fieldIndex)
+				{
+				case 1: endpoint.CurReadCount = val; break;
+				case 9: endpoint.CurWriteCount = val; break;
+				}
+			}
+
+			if (endpoint.CurReadCount != 0 || endpoint.CurWriteCount != 0)
+				ioEndpoints.emplace_back(std::move(endpoint));
+		}
 	}
 
 	static void UpdateIOEndpoints(std::uint64_t timeSpent)
@@ -336,6 +387,143 @@ namespace Profiler
 		return true;
 	}
 
+	static bool ParseProcPIDStat(Process process, RuntimeData* runtimeData)
+	{
+		bool opened  = false;
+		auto content = ReadAllContent("/proc/" + std::to_string(process) + "/stat", &opened);
+		if (!opened)
+			return false;
+
+		runtimeData->CPUs.resize(1);
+		auto& cpu          = runtimeData->CPUs[0];
+		auto& mem          = runtimeData->Memory;
+		mem.PageFaultCount = 0;
+		cpu.LastSysTime    = cpu.CurSysTime;
+		cpu.LastUserTime   = cpu.CurUserTime;
+
+		std::string_view contentView(content);
+		std::size_t      fieldIndex = 0;
+		std::size_t      offset     = contentView.find_first_not_of(' ');
+		while (offset < contentView.size())
+		{
+			std::size_t end = contentView.find_first_of(' ', offset);
+			if (end == std::string::npos)
+				break;
+			std::size_t start = offset;
+			offset            = end + 1;
+			++fieldIndex;
+
+			if (fieldIndex != 10 && fieldIndex != 12 && fieldIndex != 14 && fieldIndex != 15)
+				continue;
+
+			std::uint64_t val = std::strtoull(contentView.data() + start, nullptr, 10);
+			switch (fieldIndex)
+			{
+			case 10: mem.PageFaultCount += val; break;
+			case 12: mem.PageFaultCount += val; break;
+			case 14: cpu.CurUserTime = ConvertUserHZ(val); break;
+			case 15: cpu.CurSysTime = ConvertUserHZ(val); break;
+			}
+		}
+
+		return true;
+	}
+
+	static bool ParseProcPIDStatm(Process process, RuntimeData* runtimeData)
+	{
+		bool opened  = false;
+		auto content = ReadAllContent("/proc/" + std::to_string(process) + "/statm", &opened);
+		if (!opened)
+			return false;
+
+		auto& mem         = runtimeData->Memory;
+		mem.PhysicalTotal = 0;
+		mem.PhysicalUsage = 0;
+		mem.VirtualTotal  = 0;
+		mem.VirtualUsage  = 0;
+
+		std::string_view contentView(content);
+		std::size_t      fieldIndex = 0;
+		std::size_t      offset     = contentView.find_first_not_of(' ');
+		while (offset < contentView.size())
+		{
+			std::size_t end = contentView.find_first_of(' ', offset);
+			if (end == std::string::npos)
+				break;
+			std::size_t start = offset;
+			offset            = end + 1;
+			++fieldIndex;
+
+			if (fieldIndex != 1 && fieldIndex != 2)
+				continue;
+
+			std::uint64_t val = std::strtoull(contentView.data() + start, nullptr, 10);
+			switch (fieldIndex)
+			{
+			case 1: mem.VirtualTotal = mem.VirtualUsage = val * 1024; break;
+			case 2: mem.PhysicalTotal = mem.PhysicalUsage = val * 1024; break;
+			}
+		}
+
+		return true;
+	}
+
+	static bool ParseProcPIDIo(Process process, RuntimeData* runtimeData)
+	{
+		bool opened  = false;
+		auto content = ReadAllContent("/proc/" + std::to_string(process) + "/io", &opened);
+		if (!opened)
+			return false;
+
+		std::uint64_t read_bytes = 0, write_bytes = 0;
+
+		std::string_view contentView(content);
+		std::size_t      offset = 0;
+		while (offset < contentView.size())
+		{
+			std::size_t lineEnd = contentView.find_first_of('\n', offset + 1);
+			if (lineEnd == std::string::npos)
+				break;
+			std::string_view line = contentView.substr(offset, lineEnd - offset);
+			offset                = lineEnd + 1;
+			if (line.empty())
+				continue;
+
+			std::size_t      keyEnd = line.find_first_of(':');
+			std::string_view key    = line.substr(0, keyEnd);
+
+			std::uint8_t index;
+			if (key == "read_bytes")
+				index = 0;
+			else if (key == "write_bytes")
+				index = 1;
+			else
+				continue;
+
+			std::size_t      valueBegin = line.find_first_not_of(' ', keyEnd + 1);
+			std::size_t      valueEnd   = line.find_first_of(' ', valueBegin);
+			std::string_view value      = line.substr(valueBegin, valueEnd - valueBegin);
+			std::uint64_t    val        = std::strtoull(value.data(), nullptr, 10);
+			switch (index)
+			{
+			case 0: read_bytes = val; break;
+			case 1: write_bytes = val; break;
+			}
+		}
+
+		runtimeData->IOEndpoints.resize(1);
+		auto& data         = runtimeData->IOEndpoints[0];
+		data.CurReadCount  = read_bytes;
+		data.CurWriteCount = write_bytes;
+		data.CurOtherCount = 0;
+		data.CurReadTime   = 0;
+		data.CurWriteTime  = 0;
+		data.CurOtherTime  = 0;
+		data.IdleTime      = 0;
+		data.Usage         = 0.0;
+		return true;
+	}
+
 	Process GetSystemProcess()
 	{
 		return 0;
@@ -374,21 +562,25 @@ namespace Profiler
 			if (process == 0)
 				success = ParseProcStat(runtimeData);
 			else
-				success = false; // TODO(MarcasRealAccount): Implement per process cpu data!
+				success = ParseProcPIDStat(process, runtimeData);
 
 			if (success)
 			{
-				double timePerThread   = static_cast<double>(timeSpent) * std::thread::hardware_concurrency();
+				double totalTimeSpent  = static_cast<double>(timeSpent);
 				runtimeData->Abilities |= RuntimeAbilities::CPUUsage;
 				if (runtimeData->CPUs.size() > 1)
 					runtimeData->Abilities |= RuntimeAbilities::IndividualCPUUsages;
+				else
+					totalTimeSpent *= std::thread::hardware_concurrency();
+				if (process)
+					runtimeData->Abilities |= RuntimeAbilities::MemoryPageFaults;
 
 				for (std::size_t i = 0; i < runtimeData->CPUs.size(); ++i)
 				{
 					auto&         cpu       = runtimeData->CPUs[i];
 					std::uint64_t totalTime = ((cpu.CurSysTime - cpu.LastSysTime) + (cpu.CurUserTime - cpu.LastUserTime));
-					cpu.IdleTime            = timePerThread - totalTime;
-					cpu.Usage               = static_cast<double>(totalTime) / timePerThread;
+					cpu.IdleTime            = static_cast<std::uint64_t>(totalTimeSpent - totalTime);
+					cpu.Usage               = static_cast<double>(totalTime) / totalTimeSpent;
 				}
 			}
 			else
@@ -408,7 +600,7 @@ namespace Profiler
 			if (process == 0)
 				success = ParseProcMemInfo(runtimeData);
 			else
-				success = false; // TODO(MarcasRealAccount): Implement per process memory data!
+				success = ParseProcPIDStatm(process, runtimeData);
 
 			if (success)
 			{
@@ -421,16 +613,18 @@ namespace Profiler
 			if (process == 0)
 			{
 				PollSystemIOData(runtimeData, curGetTime);
-
-				if (!runtimeData->IOEndpoints.empty())
-				{
-					runtimeData->Abilities |= RuntimeAbilities::IOUsage;
-					if (runtimeData->IOEndpoints.size() > 1)
-						runtimeData->Abilities |= RuntimeAbilities::IndividualIOUsages;
-				}
 			}
 			else
 			{
+				if (!ParseProcPIDIo(process, runtimeData))
+					runtimeData->IOEndpoints.clear();
+			}
+
+			if (!runtimeData->IOEndpoints.empty())
+			{
+				runtimeData->Abilities |= RuntimeAbilities::IOUsage;
+				if (runtimeData->IOEndpoints.size() > 1)
+					runtimeData->Abilities |= RuntimeAbilities::IndividualIOUsages;
 			}
 		}
 
